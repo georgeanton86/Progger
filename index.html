@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PrognoSX Assistant</title>
+  <title>PrognoSX Assistant</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; background: #f9f9f9; }
+    textarea { width: 100%; max-width: 600px; height: 120px; margin-bottom: 1rem; font-size: 1rem; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; }
+    pre { background: #fff; padding: 1rem; border-radius: 8px; max-width: 600px; white-space: pre-wrap; }
+  </style>
 </head>
 <body>
-    <h1>Hello, Progno</h1>
-    <textarea id="input" rows="4" cols="50">Mike is a 62-year-old male that enters the clinic with right knee pain</textarea><br>
-    <button onclick="askProgno()">Ask</button>
-    <p id="output"></p>
-    <script src="script.js"></script>
+  <h1>PrognoSX Assistant</h1>
+  <textarea id="input" placeholder="Describe the patient’s issue here..."></textarea><br>
+  <button onclick="askProgno()">Ask</button>
+  <pre id="output">Response will appear here...</pre>
+  <script src="script.js"></script>
 </body>
 </html>

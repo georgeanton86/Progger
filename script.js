@@ -1,7 +1,7 @@
 async function askProgno() {
   const input = document.getElementById("input").value;
   const output = document.getElementById("output");
-  output.innerText = "Loading...";
+  output.textContent = "Loading...";
 
   try {
     const res = await fetch("/api/chat", {
@@ -11,8 +11,8 @@ async function askProgno() {
     });
 
     const data = await res.json();
-    output.innerText = data.reply || "No response.";
+    output.textContent = data.reply || "No reply.";
   } catch (err) {
-    output.innerText = "Error: " + err.message;
+    output.textContent = "Error: " + err.message;
   }
 }
