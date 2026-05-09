@@ -1,0 +1,98 @@
+import type { Patient, Appointment, DashboardStats } from "./types";
+
+export const samplePatients: Patient[] = [
+  {
+    id: "p1",
+    mrn: "MRN-001",
+    firstName: "Maria",
+    lastName: "Santos",
+    dob: "1968-04-12",
+    sex: "F",
+    phone: "555-0101",
+    insurance: "BlueCross BlueShield",
+    insuranceId: "BCB-44821",
+    primaryDx: "Type 2 Diabetes",
+    allergies: ["Penicillin", "Sulfa"],
+    medications: [
+      { id: "m1", name: "Metformin", dose: "1000mg", frequency: "BID", prescriber: "Dr. Smith", startDate: "2022-01-10", active: true },
+      { id: "m2", name: "Lisinopril", dose: "10mg", frequency: "QD", prescriber: "Dr. Smith", startDate: "2021-06-01", active: true },
+    ],
+    encounters: [],
+    appointments: [],
+    createdAt: "2021-06-01",
+  },
+  {
+    id: "p2",
+    mrn: "MRN-002",
+    firstName: "James",
+    lastName: "Okafor",
+    dob: "1975-09-30",
+    sex: "M",
+    phone: "555-0102",
+    insurance: "Aetna",
+    insuranceId: "AET-99231",
+    primaryDx: "Hypertension",
+    allergies: ["Aspirin"],
+    medications: [
+      { id: "m3", name: "Amlodipine", dose: "5mg", frequency: "QD", prescriber: "Dr. Smith", startDate: "2023-03-15", active: true },
+    ],
+    encounters: [],
+    appointments: [],
+    createdAt: "2023-03-15",
+  },
+  {
+    id: "p3",
+    mrn: "MRN-003",
+    firstName: "Linda",
+    lastName: "Chen",
+    dob: "1952-11-05",
+    sex: "F",
+    phone: "555-0103",
+    insurance: "Medicare",
+    insuranceId: "MED-77291",
+    primaryDx: "COPD",
+    allergies: [],
+    medications: [
+      { id: "m4", name: "Albuterol", dose: "90mcg", frequency: "PRN", prescriber: "Dr. Smith", startDate: "2020-09-01", active: true },
+      { id: "m5", name: "Tiotropium", dose: "18mcg", frequency: "QD", prescriber: "Dr. Smith", startDate: "2020-09-01", active: true },
+    ],
+    encounters: [],
+    appointments: [],
+    createdAt: "2020-09-01",
+  },
+  {
+    id: "p4",
+    mrn: "MRN-004",
+    firstName: "Robert",
+    lastName: "Williams",
+    dob: "1985-02-18",
+    sex: "M",
+    phone: "555-0104",
+    insurance: "United Healthcare",
+    insuranceId: "UHC-55821",
+    primaryDx: "Anxiety Disorder",
+    allergies: ["Codeine"],
+    medications: [
+      { id: "m6", name: "Sertraline", dose: "50mg", frequency: "QD", prescriber: "Dr. Smith", startDate: "2024-01-05", active: true },
+    ],
+    encounters: [],
+    appointments: [],
+    createdAt: "2024-01-05",
+  },
+];
+
+export const sampleAppointments: Appointment[] = [
+  { id: "a1", patientId: "p1", patientName: "Maria Santos", date: "2026-05-09", time: "09:00", type: "Follow-up", status: "scheduled", insurance: "BlueCross BlueShield", chiefComplaint: "Diabetes management check" },
+  { id: "a2", patientId: "p2", patientName: "James Okafor", date: "2026-05-09", time: "09:30", type: "Follow-up", status: "checked-in", insurance: "Aetna", chiefComplaint: "BP control review" },
+  { id: "a3", patientId: "p3", patientName: "Linda Chen", date: "2026-05-09", time: "10:00", type: "Sick Visit", status: "scheduled", insurance: "Medicare", chiefComplaint: "Increased dyspnea" },
+  { id: "a4", patientId: "p4", patientName: "Robert Williams", date: "2026-05-09", time: "10:30", type: "Follow-up", status: "scheduled", insurance: "United Healthcare", chiefComplaint: "Medication side effects" },
+];
+
+export const sampleStats: DashboardStats = {
+  patientsToday: 12,
+  completedEncounters: 5,
+  pendingSignatures: 3,
+  estimatedRevenue: 4850,
+  avgEncounterTime: 18,
+  patientSatisfaction: 4.7,
+};
