@@ -7,7 +7,7 @@ const categories = ["all", "preventive", "chronic", "diagnostic", "procedural", 
 
 const categoryColors: Record<string, string> = {
   preventive: "text-green-400 bg-green-900/20 border-green-800/40",
-  chronic: "text-blue-400 bg-blue-900/20 border-blue-800/40",
+  chronic: "text-teal-400 bg-teal-900/20 border-teal-800/40",
   diagnostic: "text-purple-400 bg-purple-900/20 border-purple-800/40",
   procedural: "text-orange-400 bg-orange-900/20 border-orange-800/40",
   transitional: "text-yellow-400 bg-yellow-900/20 border-yellow-800/40",
@@ -72,7 +72,7 @@ Total Potential: $${totalPotential.toFixed(2)}`,
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">Actioned</p>
-          <p className="text-2xl font-bold text-blue-400">${actionedTotal.toFixed(0)}</p>
+          <p className="text-2xl font-bold text-teal-400">${actionedTotal.toFixed(0)}</p>
           <p className="text-xs text-gray-500 mt-1">{actionedIds.size} items marked</p>
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
@@ -94,7 +94,7 @@ Total Potential: $${totalPotential.toFixed(2)}`,
             <h2 className="font-semibold text-white">Revenue Opportunities</h2>
             <div className="flex gap-1 flex-wrap justify-end">
               {categories.map(cat => (
-                <button key={cat} onClick={() => setActiveCategory(cat)} className={cn("px-2 py-0.5 rounded text-xs capitalize transition-colors", activeCategory === cat ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white")}>
+                <button key={cat} onClick={() => setActiveCategory(cat)} className={cn("px-2 py-0.5 rounded text-xs capitalize transition-colors", activeCategory === cat ? "bg-teal-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white")}>
                   {cat}
                 </button>
               ))}
@@ -173,7 +173,7 @@ Total Potential: $${totalPotential.toFixed(2)}`,
             <h2 className="font-semibold text-white">AI Revenue Forecast</h2>
             <p className="text-xs text-gray-400 mt-0.5">30-day optimization analysis & projections</p>
           </div>
-          <button onClick={generateForecast} disabled={loading} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+          <button onClick={generateForecast} disabled={loading} className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
             {loading ? "Analyzing..." : "Generate Forecast"}
           </button>
         </div>

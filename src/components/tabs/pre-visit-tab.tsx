@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import type { Patient, Appointment } from "@/lib/types";
 
 function ValueBadge({ score }: { score: number }) {
-  const color = score >= 90 ? "text-green-400 bg-green-900/30 border-green-700/40" : score >= 80 ? "text-blue-400 bg-blue-900/30 border-blue-700/40" : "text-yellow-400 bg-yellow-900/30 border-yellow-700/40";
+  const color = score >= 90 ? "text-green-400 bg-green-900/30 border-green-700/40" : score >= 80 ? "text-teal-400 bg-teal-900/30 border-teal-700/40" : "text-yellow-400 bg-yellow-900/30 border-yellow-700/40";
   return <span className={cn("text-xs px-2 py-0.5 rounded-full border font-semibold", color)}>{score}</span>;
 }
 
@@ -39,7 +39,7 @@ export function PreVisitTab() {
         {[
           { label: "Total Patients", value: sorted.length, color: "text-white" },
           { label: "Checked In", value: sampleAppointments.filter(a => a.status === "checked-in").length, color: "text-green-400" },
-          { label: "Pre-Visit Complete", value: sampleAppointments.filter(a => a.preVisitComplete).length, color: "text-blue-400" },
+          { label: "Pre-Visit Complete", value: sampleAppointments.filter(a => a.preVisitComplete).length, color: "text-teal-400" },
           { label: "Est. Revenue", value: `$${sampleAppointments.reduce((s, a) => s + parseFloat(a.estimatedRevenue || "0"), 0).toFixed(0)}`, color: "text-emerald-400" },
         ].map(s => (
           <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
@@ -59,7 +59,7 @@ export function PreVisitTab() {
               key={apt.id}
               onClick={() => setSelected({ patient, appointment: apt })}
               className={cn(
-                "w-full text-left p-4 rounded-xl border transition-all hover:border-blue-500/50 hover:bg-blue-600/5 group",
+                "w-full text-left p-4 rounded-xl border transition-all hover:border-teal-500/50 hover:bg-teal-600/5 group",
                 apt.status === "checked-in" ? "border-green-700/40 bg-green-900/5" : "border-gray-800 bg-gray-900/50"
               )}
             >
@@ -97,16 +97,16 @@ export function PreVisitTab() {
                   </div>
                   <div className="text-right hidden lg:block">
                     <p className="text-xs text-gray-500">Pre-Visit</p>
-                    <p className={cn("text-xs font-medium", apt.preVisitComplete ? "text-blue-400" : "text-yellow-400")}>{apt.preVisitComplete ? "Complete" : "Pending"}</p>
+                    <p className={cn("text-xs font-medium", apt.preVisitComplete ? "text-teal-400" : "text-yellow-400")}>{apt.preVisitComplete ? "Complete" : "Pending"}</p>
                   </div>
-                  <div className="text-blue-400 group-hover:text-blue-300 transition-colors text-lg">→</div>
+                  <div className="text-teal-400 group-hover:text-teal-300 transition-colors text-lg">→</div>
                 </div>
               </div>
 
               {/* Medication strip */}
               <div className="flex gap-1.5 mt-3 flex-wrap">
                 {patient.medications.map(m => (
-                  <span key={m} className="text-xs px-2 py-0.5 bg-blue-900/20 text-blue-400 border border-blue-800/30 rounded">{m}</span>
+                  <span key={m} className="text-xs px-2 py-0.5 bg-teal-900/20 text-teal-400 border border-teal-800/30 rounded">{m}</span>
                 ))}
                 {patient.allergies.filter(a => a !== "None").map(a => (
                   <span key={a} className="text-xs px-2 py-0.5 bg-red-900/20 text-red-400 border border-red-800/30 rounded">⚠ {a}</span>

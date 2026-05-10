@@ -9,7 +9,7 @@ type AptWithPatient = Appointment & { patient: Patient; timeStr: string };
 const statusColors: Record<string, string> = {
   "scheduled": "text-gray-400 bg-gray-800 border-gray-700",
   "checked-in": "text-green-400 bg-green-900/20 border-green-700/40",
-  "in-progress": "text-blue-400 bg-blue-900/20 border-blue-700/40",
+  "in-progress": "text-teal-400 bg-teal-900/20 border-teal-700/40",
   "completed": "text-purple-400 bg-purple-900/20 border-purple-700/40",
   "no-show": "text-red-400 bg-red-900/20 border-red-700/40",
   "cancelled": "text-orange-400 bg-orange-900/20 border-orange-700/40",
@@ -51,7 +51,7 @@ function AppointmentRow({ apt, onStatusChange }: { apt: AptWithPatient; onStatus
             {showActions && (
               <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded-xl shadow-xl z-10 overflow-hidden min-w-[160px]">
                 {statuses.map(s => (
-                  <button key={s} onClick={() => { onStatusChange(apt.id, s); setShowActions(false); }} className={cn("w-full text-left px-4 py-2.5 text-xs capitalize hover:bg-gray-800 transition-colors", apt.status === s ? "text-blue-400 bg-blue-900/20" : "text-gray-300")}>
+                  <button key={s} onClick={() => { onStatusChange(apt.id, s); setShowActions(false); }} className={cn("w-full text-left px-4 py-2.5 text-xs capitalize hover:bg-gray-800 transition-colors", apt.status === s ? "text-teal-400 bg-teal-900/20" : "text-gray-300")}>
                     {s.replace("-", " ")}
                   </button>
                 ))}
@@ -64,7 +64,7 @@ function AppointmentRow({ apt, onStatusChange }: { apt: AptWithPatient; onStatus
       <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-800/50">
         <div className="text-center">
           <p className="text-xs text-gray-600">Value Score</p>
-          <p className="text-xs font-semibold text-blue-400">{apt.patient.valueScore}</p>
+          <p className="text-xs font-semibold text-teal-400">{apt.patient.valueScore}</p>
         </div>
         <div className="text-center">
           <p className="text-xs text-gray-600">Payment Reliability</p>
@@ -129,11 +129,11 @@ export function AppointmentsTab() {
 
       {/* Status filter chips */}
       <div className="flex gap-2 flex-wrap mb-4">
-        <button onClick={() => setStatusFilter("all")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", statusFilter === "all" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white")}>
+        <button onClick={() => setStatusFilter("all")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", statusFilter === "all" ? "bg-teal-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white")}>
           All ({enriched.length})
         </button>
         {statuses.map(s => (counts[s] > 0 || true) && (
-          <button key={s} onClick={() => setStatusFilter(s)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors", statusFilter === s ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white")}>
+          <button key={s} onClick={() => setStatusFilter(s)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors", statusFilter === s ? "bg-teal-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white")}>
             {s.replace("-", " ")} {counts[s] ? `(${counts[s]})` : "(0)"}
           </button>
         ))}
@@ -165,7 +165,7 @@ export function AppointmentsTab() {
           </div>
           <div>
             <p className="text-xs text-gray-500">Insurance Verified</p>
-            <p className="text-sm font-bold text-blue-400">{enriched.filter(a => a.insuranceVerified).length}/{enriched.length}</p>
+            <p className="text-sm font-bold text-teal-400">{enriched.filter(a => a.insuranceVerified).length}/{enriched.length}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500">Pre-Visit Complete</p>
