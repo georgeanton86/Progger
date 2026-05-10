@@ -153,7 +153,7 @@ Data Volume: ${sampleAppointments.length} appointments today`,
               <p className="text-xs text-gray-500 mt-1">Patients Synced</p>
             </div>
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-blue-400">{sampleAppointments.length}</p>
+              <p className="text-2xl font-bold text-teal-400">{sampleAppointments.length}</p>
               <p className="text-xs text-gray-500 mt-1">Appointments Synced</p>
             </div>
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
@@ -165,7 +165,7 @@ Data Volume: ${sampleAppointments.length} appointments today`,
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-white">Sync Activity Log</h2>
-              <button onClick={simulateSync} disabled={syncing} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
+              <button onClick={simulateSync} disabled={syncing} className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
                 {syncing ? "Syncing..." : "Run Sync"}
               </button>
             </div>
@@ -176,7 +176,7 @@ Data Volume: ${sampleAppointments.length} appointments today`,
                   [{new Date().toLocaleTimeString()}] {line}
                 </p>
               ))}
-              {syncing && <p className="text-blue-400 animate-pulse">[...] Processing...</p>}
+              {syncing && <p className="text-teal-400 animate-pulse">[...] Processing...</p>}
             </div>
           </div>
         </div>
@@ -187,7 +187,7 @@ Data Volume: ${sampleAppointments.length} appointments today`,
         <h2 className="font-semibold text-white mb-4">Data Export</h2>
         <div className="flex gap-2 flex-wrap mb-4">
           {(["FHIR R4", "HL7 v2.5", "CCD/CCDA", "CSV"] as ExportFormat[]).map(fmt => (
-            <button key={fmt} onClick={() => setSelectedFormat(fmt)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border", selectedFormat === fmt ? "bg-blue-600 text-white border-blue-500" : "bg-gray-800 text-gray-400 border-gray-700 hover:text-white")}>
+            <button key={fmt} onClick={() => setSelectedFormat(fmt)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border", selectedFormat === fmt ? "bg-teal-600 text-white border-teal-500" : "bg-gray-800 text-gray-400 border-gray-700 hover:text-white")}>
               {fmt}
             </button>
           ))}
@@ -214,7 +214,7 @@ Data Volume: ${sampleAppointments.length} appointments today`,
             <h2 className="font-semibold text-white">AI Integration Strategy</h2>
             <p className="text-xs text-gray-400 mt-0.5">Personalized EHR integration roadmap</p>
           </div>
-          <button onClick={generateIntegrationAnalysis} disabled={loading} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+          <button onClick={generateIntegrationAnalysis} disabled={loading} className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
             {loading ? "Analyzing..." : "Generate Strategy"}
           </button>
         </div>

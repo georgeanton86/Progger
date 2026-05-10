@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { sampleStats, sampleAppointments, samplePatients, sampleProvider, sampleRevenueOpportunities, sampleScopeAlerts } from "@/lib/sampleData";
+import { useState, useEffect } from "react";
+import { sampleStats, sampleAppointments, samplePatients, sampleProvider } from "@/lib/sampleData";
 import { PreVisitTab } from "@/components/tabs/pre-visit-tab";
 import { ScopeValidationTab } from "@/components/tabs/scope-validation-tab";
 import { CarePlanningTab } from "@/components/tabs/care-planning-tab";
@@ -27,129 +27,148 @@ const tabs = [
   { id: "settings", label: "Profile & Credentials", icon: "⚙️" },
 ];
 
-function StatCard({ label, value, color }: { label: string; value: string | number; color: string }) {
+const specialties = [
+  "Family Practice",
+  "Internal Medicine",
+  "Cardiology",
+  "Dermatology",
+  "Emergency Medicine",
+  "Orthopedics",
+  "Psychiatry",
+  "Pediatrics",
+  "OB/GYN",
+  "Surgery",
+  "Interventional Radiology",
+  "Anesthesiology",
+  "Pathology",
+  "Radiology",
+];
+
+function StatCard({ label, value, subtitle, color }: { label: string; value: string | number; subtitle?: string; color: string }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
       <p className="text-xs text-gray-400 mb-1">{label}</p>
       <p className={`text-2xl font-bold ${color}`}>{value}</p>
+      {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
     </div>
   );
 }
 
+function getInitials(name: string) {
+  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
 function DashboardHome() {
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const stats = sampleStats;
+
+  const sorted = [...sampleAppointments].sort((a, b) =>
+    new Date(a.appointmentTime).getTime() - new Date(b.appointmentTime).getTime()
+  );
+
+  const providerBriefingPatients = sorted.slice(0, 2).map(apt => {
+    const p = samplePatients.find(pt => pt.id === apt.patientId)!;
+    return { patient: p, apt };
+  });
 
   return (
     <div className="p-6">
-      {/* AI Status Banner */}
-      <div className="mb-5 flex items-center gap-3 px-4 py-2.5 bg-blue-950/40 border border-blue-800/30 rounded-xl">
+      {/* 4 KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <StatCard label="Today's Patients" value={stats.patientsToday} color="text-teal-400" />
+        <StatCard label="Revenue Today" value={`$${stats.revenueToday.toLocaleString()}`} color="text-emerald-400" />
+        <StatCard label="Scope Alerts" value={3} subtitle="2 caution · 1 outside scope" color="text-yellow-400" />
+        <StatCard label="Satisfaction Score" value="4.8 ★" subtitle="96% positive" color="text-purple-400" />
+      </div>
+
+      {/* AI System Online Banner */}
+      <div className="mb-5 flex items-center gap-3 px-4 py-2.5 bg-gray-900 border border-gray-800 rounded-xl">
         <div className="flex items-center gap-2 flex-shrink-0">
           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-xs font-semibold text-green-400">PrognoSX AI Online</span>
+          <span className="text-sm font-semibold text-teal-400">PrognoSX AI System Online</span>
         </div>
-        <div className="h-3 w-px bg-blue-800/50" />
-        <div className="flex items-center gap-4 text-xs text-blue-300/70 overflow-x-auto flex-nowrap">
-          <span>Model: claude-sonnet-4-6</span>
-          <span>·</span>
-          <span>Uptime: 99.9%</span>
-          <span>·</span>
-          <span>Processing: 847 patients/hour</span>
-          <span>·</span>
-          <span>Latency: 1.2s avg</span>
-          <span>·</span>
-          <span>Last update: {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-        </div>
+        <div className="h-3 w-px bg-gray-700" />
+        <span className="text-xs text-gray-400">99.9% Uptime · Processing: 847 patients/hour</span>
       </div>
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">PrognoSX Dashboard</h1>
-        <p className="text-gray-400 text-sm mt-0.5">{today}</p>
-        <p className="text-xs text-gray-500 mt-0.5">Provider: {sampleProvider.name} · {sampleProvider.specialty} · {sampleProvider.credentials}</p>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
-        <StatCard label="Patients Today" value={stats.patientsToday} color="text-blue-400" />
-        <StatCard label="Completed" value={stats.completedEncounters} color="text-green-400" />
-        <StatCard label="Pending Signatures" value={stats.pendingSignatures} color="text-yellow-400" />
-        <StatCard label="Est. Revenue" value={`$${stats.estimatedRevenue.toLocaleString()}`} color="text-emerald-400" />
-        <StatCard label="Avg Encounter" value={`${stats.avgEncounterTime}m`} color="text-purple-400" />
-        <StatCard label="Patient Satisfaction" value={`${stats.patientSatisfaction}/5`} color="text-pink-400" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="font-semibold text-white mb-4">Today&apos;s Schedule</h2>
-          <div className="space-y-2">
-            {sampleAppointments.map(apt => {
-              const patient = samplePatients.find(p => p.id === apt.patientId)!;
-              const time = new Date(apt.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-              return (
-                <div key={apt.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-mono text-gray-400 w-12">{time}</span>
-                    <div>
-                      <p className="text-sm font-medium text-white">{patient.name}</p>
-                      <p className="text-xs text-gray-400">{patient.primaryComplaint}</p>
+      {/* Pre-Visit Patients */}
+      <div className="bg-white rounded-xl p-5 mb-5">
+        <h2 className="font-bold text-gray-900 text-lg mb-4">Pre-Visit Patients</h2>
+        <div className="space-y-3">
+          {sorted.map(apt => {
+            const patient = samplePatients.find(p => p.id === apt.patientId)!;
+            if (!patient) return null;
+            const time = new Date(apt.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            const hasScopeWarning = patient.noShowRate > 10 || patient.medicalHistory.some(h => h.toLowerCase().includes("copd"));
+            const avatarColor = hasScopeWarning ? "bg-amber-500" : "bg-teal-500";
+            return (
+              <div key={apt.id} className="border border-gray-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  {/* Avatar */}
+                  <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
+                    {getInitials(patient.name)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="font-semibold text-gray-900">{patient.name}, {patient.age}</p>
+                      <div className="flex items-center gap-3 text-sm text-gray-500">
+                        <span>{time}</span>
+                        <span className="text-gray-700 font-medium">{patient.primaryComplaint}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">{patient.insuranceProvider}</span>
-                    <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", apt.status === "checked-in" ? "bg-green-900/40 text-green-400" : "bg-gray-700 text-gray-400")}>
-                      {apt.status.replace("-", " ")}
-                    </span>
+                    <div className="mb-2">
+                      <span className="text-xs text-gray-500 font-medium">📋 History of Present Illness</span>
+                      <p className="text-sm text-gray-400 mt-0.5">{patient.hpiPreview}</p>
+                    </div>
+                    {hasScopeWarning && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                        <span className="text-amber-600 text-xs font-semibold">⚠ Scope Validation Recommended</span>
+                        <span className="text-amber-500 text-xs">· {patient.primaryComplaint} requires additional scope validation</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
+      </div>
 
+      {/* Provider Briefing - Patient Satisfaction */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <h2 className="font-semibold text-white mb-4">Provider Briefing - Patient Satisfaction</h2>
         <div className="space-y-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-white">System Status</h2>
-              <span className="text-xs text-green-400 bg-green-900/20 px-2 py-0.5 rounded-full border border-green-700/40">All Systems Go</span>
-            </div>
-            <div className="space-y-2">
-              {[
-                { label: "AI Engine", status: "Online", color: "text-green-400" },
-                { label: `EHR (${sampleProvider.ehrSystem})`, status: "Connected", color: "text-green-400" },
-                { label: "Insurance Verification", status: "Active", color: "text-green-400" },
-                { label: "Revenue Tracking", status: "Live", color: "text-blue-400" },
-              ].map(item => (
-                <div key={item.label} className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">{item.label}</span>
-                  <span className={`text-xs font-medium ${item.color}`}>{item.status}</span>
+          {providerBriefingPatients.map(({ patient, apt }) => {
+            const time = new Date(apt.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            return (
+              <div key={apt.id} className="bg-gray-800 rounded-xl p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold">
+                    {getInitials(patient.name)}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white">{patient.name}</p>
+                    <p className="text-xs text-gray-400">{time} · {patient.primaryComplaint}</p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h2 className="font-semibold text-white mb-3">Top Revenue Opportunities</h2>
-            <div className="space-y-2">
-              {sampleRevenueOpportunities.slice(0, 3).map(opp => (
-                <div key={opp.id} className="flex items-start justify-between gap-2">
-                  <p className="text-xs text-gray-400 flex-1">{opp.opportunityType}</p>
-                  <span className="text-xs font-bold text-emerald-400 flex-shrink-0">${opp.estimatedRevenue}</span>
-                </div>
-              ))}
-              <p className="text-xs text-gray-600 mt-1">{sampleRevenueOpportunities.length} total opportunities identified</p>
-            </div>
-          </div>
-
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h2 className="font-semibold text-white mb-3">Scope Alerts</h2>
-            <div className="space-y-2">
-              {sampleScopeAlerts.map(alert => (
-                <div key={alert.id} className="flex items-start justify-between gap-2">
-                  <p className="text-xs text-gray-400 flex-1">{alert.procedure}</p>
-                  <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${alert.riskLevel === "high" ? "bg-red-900/40 text-red-400" : alert.riskLevel === "medium" ? "bg-yellow-900/40 text-yellow-400" : "bg-green-900/40 text-green-400"}`}>{alert.riskLevel}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+                <ul className="space-y-1.5 text-sm text-gray-300">
+                  <li className="flex items-start gap-2"><span className="text-teal-400 mt-0.5">•</span> Patient has {patient.paymentReliability}% payment reliability — reliable financial profile.</li>
+                  <li className="flex items-start gap-2"><span className="text-teal-400 mt-0.5">•</span> Insurance: {patient.insuranceProvider} {patient.insurancePlan} — verify coverage before visit.</li>
+                  <li className="flex items-start gap-2"><span className="text-teal-400 mt-0.5">•</span> Review medications: {patient.medications.slice(0, 2).join(", ")}{patient.medications.length > 2 ? ` +${patient.medications.length - 2} more` : ""}.</li>
+                  {patient.allergies.filter(a => a !== "None").length > 0 && (
+                    <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">•</span> Allergy alert: {patient.allergies.filter(a => a !== "None").join(", ")}.</li>
+                  )}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -158,14 +177,25 @@ function DashboardHome() {
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [specialty, setSpecialty] = useState(sampleProvider.specialty);
+  const [recording, setRecording] = useState(false);
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-gray-950">
       {/* Sidebar */}
       <aside className="w-60 bg-gray-900 border-r border-gray-800 flex flex-col flex-shrink-0">
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">Rx</div>
+            <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold">Rx</div>
             <div>
               <p className="font-semibold text-white text-sm">PrognoSX</p>
               <p className="text-xs text-gray-400">AI Medical Intelligence</p>
@@ -179,7 +209,7 @@ export default function DashboardPage() {
               onClick={() => setActiveTab(tab.id)}
               className={cn(
                 "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left",
-                activeTab === tab.id ? "bg-blue-600/20 text-blue-400 font-medium" : "text-gray-400 hover:text-white hover:bg-gray-800"
+                activeTab === tab.id ? "bg-teal-600/20 text-teal-400 font-medium" : "text-gray-400 hover:text-white hover:bg-gray-800"
               )}
             >
               <span className="text-sm w-4 text-center flex-shrink-0">{tab.icon}</span>
@@ -195,20 +225,62 @@ export default function DashboardPage() {
         </div>
       </aside>
 
-      {/* Content */}
-      <main className="flex-1 overflow-y-auto bg-gray-950">
-        {activeTab === "dashboard" && <DashboardHome />}
-        {activeTab === "pre-visit" && <PreVisitTab />}
-        {activeTab === "scope" && <ScopeValidationTab />}
-        {activeTab === "care-planning" && <CarePlanningTab />}
-        {activeTab === "briefing" && <ProtectiveBriefingTab />}
-        {activeTab === "insurance" && <InsuranceTab />}
-        {activeTab === "revenue" && <RevenueTab />}
-        {activeTab === "patients" && <PatientsTab />}
-        {activeTab === "appointments" && <AppointmentsTab />}
-        {activeTab === "ehr" && <EhrIntegrationTab />}
-        {activeTab === "settings" && <SettingsTab />}
-      </main>
+      {/* Main area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header bar */}
+        <div className="border-b border-gray-800 px-5 py-3 flex items-center justify-between flex-shrink-0 bg-gray-900">
+          {/* Left */}
+          <div>
+            <p className="font-bold text-white text-sm">PrognoSX Dashboard</p>
+            <p className="text-gray-500 text-xs">{dateStr} · {timeStr}</p>
+          </div>
+
+          {/* Center: specialty selector */}
+          <div>
+            <select
+              value={specialty}
+              onChange={e => setSpecialty(e.target.value)}
+              className="bg-gray-800 text-gray-200 text-sm border border-gray-700 rounded-lg px-3 py-1.5 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+            >
+              {specialties.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Right */}
+          <div className="flex items-center gap-3">
+            <button className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800" title="Toggle dark mode">
+              🌙
+            </button>
+            <button
+              onClick={() => setRecording(r => !r)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                recording ? "bg-red-600 hover:bg-red-700 text-white" : "bg-teal-500 hover:bg-teal-600 text-white"
+              )}
+            >
+              {recording ? "⏹ Stop Recording" : "🎤 Hello Progno"}
+            </button>
+            <span className="text-gray-400 text-sm">{sampleProvider.name}</span>
+          </div>
+        </div>
+
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto bg-gray-950">
+          {activeTab === "dashboard" && <DashboardHome />}
+          {activeTab === "pre-visit" && <PreVisitTab />}
+          {activeTab === "scope" && <ScopeValidationTab />}
+          {activeTab === "care-planning" && <CarePlanningTab />}
+          {activeTab === "briefing" && <ProtectiveBriefingTab />}
+          {activeTab === "insurance" && <InsuranceTab />}
+          {activeTab === "revenue" && <RevenueTab />}
+          {activeTab === "patients" && <PatientsTab />}
+          {activeTab === "appointments" && <AppointmentsTab />}
+          {activeTab === "ehr" && <EhrIntegrationTab />}
+          {activeTab === "settings" && <SettingsTab />}
+        </main>
+      </div>
     </div>
   );
 }

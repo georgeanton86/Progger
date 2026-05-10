@@ -1,166 +1,246 @@
 "use client";
 import { useState } from "react";
-import { useStreamingAI } from "@/hooks/use-streaming-ai";
 import { cn } from "@/lib/utils";
 import type { Patient, Appointment } from "@/lib/types";
 
-type EncounterTab = "prechart" | "vitals" | "soap" | "billing";
+function getInitials(name: string) {
+  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+}
 
-const ROS_SYSTEMS = [
-  { key: "constitutional", label: "Constitutional", symptoms: ["Fever/chills", "Fatigue", "Weight loss", "Night sweats", "Malaise"] },
-  { key: "heent", label: "HEENT", symptoms: ["Headache", "Vision changes", "Hearing loss", "Ear pain", "Nasal congestion", "Sore throat"] },
-  { key: "cardiovascular", label: "Cardiovascular", symptoms: ["Chest pain", "Palpitations", "Edema", "Syncope", "Orthopnea"] },
-  { key: "respiratory", label: "Respiratory", symptoms: ["Dyspnea", "Cough", "Wheezing", "Hemoptysis", "Pleuritic pain"] },
-  { key: "gi", label: "Gastrointestinal", symptoms: ["Nausea", "Vomiting", "Abdominal pain", "Diarrhea", "Constipation", "Melena"] },
-  { key: "gu", label: "Genitourinary", symptoms: ["Dysuria", "Frequency", "Hematuria", "Incontinence", "Discharge"] },
-  { key: "msk", label: "Musculoskeletal", symptoms: ["Joint pain", "Muscle weakness", "Back pain", "Morning stiffness", "Swelling"] },
-  { key: "neuro", label: "Neurological", symptoms: ["Dizziness", "Numbness", "Weakness", "Seizures", "Memory changes"] },
-  { key: "psych", label: "Psychiatric", symptoms: ["Depression", "Anxiety", "Insomnia", "Mood changes", "Suicidal ideation"] },
-  { key: "skin", label: "Skin", symptoms: ["Rash", "Pruritis", "Lesions", "Hair loss", "Nail changes"] },
-  { key: "endo", label: "Endocrine", symptoms: ["Polyuria", "Polydipsia", "Heat intolerance", "Cold intolerance", "Tremor"] },
-  { key: "heme", label: "Hematologic", symptoms: ["Easy bruising", "Bleeding", "Lymphadenopathy", "Petechiae"] },
-];
+type SectionStatus = "idle" | "accepted" | "rejected";
 
-const PE_SYSTEMS = [
-  { key: "general", label: "General", findings: ["Well-appearing", "No acute distress", "Alert and oriented", "Ambulatory"] },
-  { key: "heent", label: "HEENT", findings: ["Normocephalic/atraumatic", "PERRL", "TMs clear bilaterally", "Oropharynx clear", "Mucous membranes moist"] },
-  { key: "neck", label: "Neck", findings: ["Supple", "No lymphadenopathy", "Thyroid normal", "No JVD", "No meningismus"] },
-  { key: "cv", label: "Cardiovascular", findings: ["Regular rate and rhythm", "No murmurs/rubs/gallops", "Peripheral pulses 2+", "No carotid bruits"] },
-  { key: "resp", label: "Respiratory", findings: ["Clear to auscultation bilaterally", "No wheezes/rales/rhonchi", "Good air movement", "No accessory muscle use"] },
-  { key: "abd", label: "Abdomen", findings: ["Soft and non-tender", "Non-distended", "Normal bowel sounds", "No hepatosplenomegaly", "No guarding/rigidity"] },
-  { key: "ext", label: "Extremities", findings: ["No edema", "No cyanosis or clubbing", "Pulses intact bilaterally", "Full ROM"] },
-  { key: "neuro", label: "Neurological", findings: ["A&Ox4", "CN II-XII grossly intact", "Motor strength 5/5", "Sensation intact", "Gait normal"] },
-  { key: "skin", label: "Skin", findings: ["Warm and dry", "No rash", "Good turgor", "No lesions noted"] },
-  { key: "psych", label: "Psychiatric", findings: ["Cooperative", "Appropriate mood/affect", "Normal thought process", "Good insight/judgment"] },
-];
+type CarePlanSection = {
+  confidence: number;
+  items?: string[];
+  primary?: string;
+  secondaries?: string[];
+  ruleOut?: string[];
+  source: string;
+};
 
-type ROSState = Record<string, Record<string, "negative" | "positive" | "unset">>;
-type PEState = Record<string, Record<string, boolean>>;
-type VitalsState = { bp: string; hr: string; temp: string; rr: string; o2sat: string; weight: string; height: string; bmi: string };
-type SOAPState = { subjective: string; objective: string; assessment: string; plan: string };
+type DDXItem = {
+  diagnosis: string;
+  icd10: string;
+  confidence: number;
+  legalRisk: "low" | "medium" | "high";
+  recommended: boolean;
+  description: string;
+};
 
-function ROSCheckbox({ value, onChange }: { value: "negative" | "positive" | "unset"; onChange: (v: "negative" | "positive" | "unset") => void }) {
+type PrescriptionItem = {
+  name: string;
+  dosing: string;
+  pharmacy: string;
+};
+
+type SOAPNote = {
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+};
+
+type CarePlan = {
+  assessment: CarePlanSection & { primary: string; secondaries: string[]; ruleOut: string[] };
+  diagnostics: CarePlanSection;
+  treatmentPlan: CarePlanSection;
+  patientEducation: CarePlanSection;
+  followUp: CarePlanSection;
+  ddx: DDXItem[];
+  prescriptions: PrescriptionItem[];
+  soap: SOAPNote;
+};
+
+function ConfidenceBadge({ value }: { value: number }) {
   return (
-    <button onClick={() => onChange(value === "unset" ? "negative" : value === "negative" ? "positive" : "unset")} className={cn("w-5 h-5 rounded text-xs font-bold flex items-center justify-center border transition-colors flex-shrink-0", value === "negative" ? "bg-green-900/40 border-green-600 text-green-400" : value === "positive" ? "bg-red-900/40 border-red-600 text-red-400" : "bg-gray-800 border-gray-700 text-gray-600")}>
-      {value === "negative" ? "−" : value === "positive" ? "+" : "·"}
-    </button>
+    <span className="text-xs px-2 py-0.5 rounded bg-teal-900/40 text-teal-400 border border-teal-700/40 font-medium">
+      {value}% confidence
+    </span>
   );
 }
 
-export function StreamlinedEncounter({ patient, appointment, onBack }: { patient: Patient; appointment: Appointment; onBack: () => void }) {
-  const [activeTab, setActiveTab] = useState<EncounterTab>("prechart");
-  const [hpi, setHpi] = useState("");
-  const [ros, setRos] = useState<ROSState>({});
-  const [pe, setPe] = useState<PEState>({});
-  const [vitals, setVitals] = useState<VitalsState>({ bp: "", hr: "", temp: "", rr: "", o2sat: "", weight: "", height: "", bmi: "" });
-  const [soap, setSoap] = useState<SOAPState>({ subjective: "", objective: "", assessment: "", plan: "" });
-  const [icd10, setIcd10] = useState("");
-  const [cpt, setCpt] = useState("");
-  const [signed, setSigned] = useState(false);
-
-  const preChart = useStreamingAI();
-  const soapAI = useStreamingAI();
-  const billingAI = useStreamingAI();
-
-  const aptTime = new Date(appointment.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-  function setROSValue(system: string, symptom: string, value: "negative" | "positive" | "unset") {
-    setRos(prev => ({ ...prev, [system]: { ...(prev[system] || {}), [symptom]: value } }));
-  }
-
-  function togglePE(system: string, finding: string) {
-    setPe(prev => ({ ...prev, [system]: { ...(prev[system] || {}), [finding]: !(prev[system]?.[finding]) } }));
-  }
-
-  const rosPositives = Object.entries(ros).flatMap(([sys, syms]) =>
-    Object.entries(syms).filter(([, v]) => v === "positive").map(([sym]) => `${sys}: ${sym}`)
-  );
-  const rosNegatives = Object.entries(ros).flatMap(([sys, syms]) =>
-    Object.entries(syms).filter(([, v]) => v === "negative").map(([sym]) => `${sys}: denies ${sym}`)
-  );
-
-  const peFindings = Object.entries(pe).flatMap(([sys, findings]) => {
-    const positive = Object.entries(findings).filter(([, v]) => v).map(([f]) => f);
-    if (!positive.length) return [];
-    return [`${PE_SYSTEMS.find(s => s.key === sys)?.label}: ${positive.join(", ")}`];
-  });
-
-  async function runPreChart() {
-    await preChart.run(
-      "Generate a comprehensive, detailed pre-visit clinical summary for the provider. Include: key patient context with risk factors, likely discussion points for this visit, all relevant clinical considerations and evidence-based management options, medication review with potential interactions, suggested orders and preventive care gaps, risk flags with clinical significance, documentation requirements for appropriate E&M level, and specific ICD-10 codes likely applicable today.",
-      `Patient: ${patient.name}, Age: ${patient.age}, DOB: ${patient.dateOfBirth}
-Chief Complaint: ${patient.primaryComplaint}
-Insurance: ${patient.insuranceProvider} ${patient.insurancePlan}
-Medical History: ${patient.medicalHistory.join(", ")}
-Medications: ${patient.medications.join(", ")}
-Allergies: ${patient.allergies.join(", ")}
-Value Score: ${patient.valueScore} | Revenue/Visit: $${patient.revenuePerVisit} | Payment Reliability: ${patient.paymentReliability}% | No-Show Rate: ${patient.noShowRate}%`
-    );
-  }
-
-  async function generateSOAP() {
-    const vitalStr = Object.entries(vitals).filter(([, v]) => v).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(", ");
-    const soapText = await new Promise<string>(resolve => {
-      let full = "";
-      soapAI.run(
-        "Generate a complete, clinically rigorous SOAP note with four clearly labeled sections: SUBJECTIVE, OBJECTIVE, ASSESSMENT, PLAN. In ASSESSMENT include the primary diagnosis with ICD-10 code, up to 3 differential diagnoses, and clinical reasoning. In PLAN include CPT codes for all services, prescriptions with dosing, follow-up timeline, and patient education points. Be thorough and specific.",
-        `Patient: ${patient.name}, Age: ${patient.age}
-Chief Complaint: ${patient.primaryComplaint}
-HPI: ${hpi || "Not documented"}
-Medical History: ${patient.medicalHistory.join(", ")}
-Medications: ${patient.medications.join(", ")}
-Allergies: ${patient.allergies.join(", ")}
-Vitals: ${vitalStr || "Not recorded"}
-ROS Positives: ${rosPositives.join("; ") || "None documented"}
-ROS Negatives: ${rosNegatives.slice(0, 8).join("; ") || "None documented"}
-Physical Exam: ${peFindings.join(" | ") || "Not documented"}
-Pre-chart notes: ${preChart.output ? preChart.output.substring(0, 300) : "None"}`
-      );
-      setTimeout(() => resolve(full), 100);
-    });
-    void soapText;
-  }
-
-  function parseSoapFromOutput(text: string) {
-    setSoap({
-      subjective: text.match(/SUBJECTIVE[:\s]+([\s\S]*?)(?=OBJECTIVE|$)/i)?.[1]?.trim() || "",
-      objective: text.match(/OBJECTIVE[:\s]+([\s\S]*?)(?=ASSESSMENT|$)/i)?.[1]?.trim() || "",
-      assessment: text.match(/ASSESSMENT[:\s]+([\s\S]*?)(?=PLAN|$)/i)?.[1]?.trim() || "",
-      plan: text.match(/PLAN[:\s]+([\s\S]*?)$/i)?.[1]?.trim() || "",
-    });
-  }
-
-  async function runBillingAnalysis() {
-    await billingAI.run(
-      `Perform a comprehensive billing analysis and provide:
-1. Recommended E&M level (99202-99215) with Medical Decision Making justification
-2. All applicable CPT codes with descriptions and RVUs
-3. ICD-10-CM codes with specificity guidance (use 7th character extensions where applicable)
-4. Modifier recommendations (25, 59, etc.) with clinical justification
-5. Pre-authorization requirements for this payer
-6. Documentation tips to support the selected E&M level
-7. Estimated reimbursement breakdown by CPT code
-8. Denial prevention tips for this diagnosis/payer combination`,
-      `Patient: ${patient.name}, Age: ${patient.age}
-Insurance: ${patient.insuranceProvider} ${patient.insurancePlan}
-Chief Complaint: ${patient.primaryComplaint}
-Diagnoses from encounter: ${soap.assessment || "Pending SOAP generation"}
-CPT codes entered: ${cpt || "Not entered"}
-Visit type: ${appointment.visitType}
-Medical History: ${patient.medicalHistory.join(", ")}`
-    );
-  }
-
-  const tabList: { id: EncounterTab; label: string; badge?: string }[] = [
-    { id: "prechart", label: "Pre-Chart" },
-    { id: "vitals", label: "Vitals & ROS" },
-    { id: "soap", label: "SOAP Note" },
-    { id: "billing", label: "Billing & Coding" },
-  ];
+function ClinicalCard({
+  title,
+  section,
+  status,
+  onAccept,
+  onReject,
+}: {
+  title: string;
+  section: CarePlanSection;
+  status: SectionStatus;
+  onAccept: () => void;
+  onReject: () => void;
+}) {
+  const items: string[] = section.items
+    ? section.items
+    : [
+        section.primary ?? "",
+        ...(section.secondaries ?? []),
+        ...(section.ruleOut?.map(r => `Rule out: ${r}`) ?? []),
+      ].filter(Boolean);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Encounter Header */}
+    <div
+      className={cn(
+        "bg-gray-900 border rounded-xl overflow-hidden",
+        status === "accepted" ? "border-teal-600/60 border-l-4 border-l-teal-500" : status === "rejected" ? "border-red-700/60 border-l-4 border-l-red-500" : "border-gray-800"
+      )}
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+        <div className="flex items-center gap-2">
+          {status === "accepted" && <span className="text-teal-400">✓</span>}
+          <h3
+            className={cn(
+              "font-semibold text-sm",
+              status === "accepted" ? "text-teal-300" : status === "rejected" ? "text-gray-500 line-through" : "text-white"
+            )}
+          >
+            {title}
+          </h3>
+          <ConfidenceBadge value={section.confidence} />
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onReject}
+            className={cn(
+              "text-xs px-2.5 py-1 rounded border transition-colors",
+              status === "rejected"
+                ? "bg-red-900/40 text-red-400 border-red-700/40"
+                : "border-gray-700 text-gray-400 hover:border-red-500 hover:text-red-400"
+            )}
+          >
+            Reject
+          </button>
+          <button
+            onClick={onAccept}
+            className={cn(
+              "text-xs px-2.5 py-1 rounded border transition-colors",
+              status === "accepted"
+                ? "bg-teal-900/40 text-teal-400 border-teal-700/40"
+                : "border-gray-700 text-gray-400 hover:border-teal-500 hover:text-teal-400"
+            )}
+          >
+            Accept
+          </button>
+        </div>
+      </div>
+      <div className="px-4 py-3">
+        <ul className="space-y-1.5">
+          {items.map((item, i) => (
+            <li key={i} className="text-sm text-gray-300 flex items-start gap-2">
+              <span className="text-teal-400 mt-0.5 flex-shrink-0">•</span>
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="px-4 py-2 border-t border-gray-800/60">
+        <p className="text-xs text-gray-500">📚 Source: {section.source}</p>
+      </div>
+    </div>
+  );
+}
+
+export function StreamlinedEncounter({
+  patient,
+  appointment,
+  onBack,
+}: {
+  patient: Patient;
+  appointment: Appointment;
+  onBack: () => void;
+}) {
+  const [generating, setGenerating] = useState(false);
+  const [carePlan, setCarePlan] = useState<CarePlan | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, SectionStatus>>({});
+  const [selectedDDX, setSelectedDDX] = useState<number | null>(null);
+  const [chartMode, setChartMode] = useState<"ehr" | "standalone">("ehr");
+  const [editingSOAP, setEditingSOAP] = useState<Record<string, boolean>>({});
+  const [soapEdits, setSoapEdits] = useState<Partial<SOAPNote>>({});
+  const [signed, setSigned] = useState(false);
+
+  const [vitals, setVitals] = useState({ bp: "", hr: "", temp: "", spo2: "" });
+
+  const aptTime = new Date(appointment.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const hasScopeWarning = appointment.scopeStatus !== "within_scope";
+
+  async function generateCarePlan() {
+    setGenerating(true);
+    setError(null);
+    setCarePlan(null);
+    setStatuses({});
+    setSelectedDDX(null);
+    try {
+      const prompt = `Generate a complete AI care plan for a patient visit as JSON. The patient details are:
+Name: ${patient.name}, Age: ${patient.age}, DOB: ${patient.dateOfBirth}
+Chief Complaint: ${patient.primaryComplaint}
+Medical History: ${patient.medicalHistory.join(", ")}
+Medications: ${patient.medications.join(", ")}
+Allergies: ${patient.allergies.join(", ")}
+Insurance: ${patient.insuranceProvider} ${patient.insurancePlan}
+
+Return ONLY valid JSON with this exact structure:
+{
+  "assessment": {"confidence": 92, "primary": "Acute Upper Respiratory Infection (J06.9)", "secondaries": ["Allergic Rhinitis (J30.9)"], "ruleOut": ["Influenza", "COVID-19"], "source": "UpToDate, AHA Guidelines"},
+  "diagnostics": {"confidence": 88, "items": ["Rapid Strep Test", "COVID-19 PCR if indicated"], "source": "CDC Guidelines"},
+  "treatmentPlan": {"confidence": 95, "items": ["Rest and hydration", "OTC decongestants PRN"], "source": "Cochrane Review"},
+  "patientEducation": {"confidence": 98, "items": ["Return precautions explained", "Hand hygiene counseling"], "source": "CDC"},
+  "followUp": {"confidence": 96, "items": ["Follow up in 1 week if no improvement", "Urgent return: worsening SOB, high fever"], "source": "AAFP"},
+  "ddx": [
+    {"diagnosis": "Acute URI", "icd10": "J06.9", "confidence": 92, "legalRisk": "low", "recommended": true, "description": "Most likely diagnosis based on presentation"},
+    {"diagnosis": "Influenza", "icd10": "J11.1", "confidence": 60, "legalRisk": "low", "recommended": false, "description": "Consider if flu season, rapid test negative"},
+    {"diagnosis": "COVID-19", "icd10": "U07.1", "confidence": 45, "legalRisk": "medium", "recommended": false, "description": "Rule out with PCR testing"},
+    {"diagnosis": "Strep Pharyngitis", "icd10": "J02.0", "confidence": 35, "legalRisk": "low", "recommended": false, "description": "Rapid strep test indicated"},
+    {"diagnosis": "Allergic Rhinitis", "icd10": "J30.9", "confidence": 30, "legalRisk": "low", "recommended": false, "description": "Consider if seasonal pattern"}
+  ],
+  "prescriptions": [
+    {"name": "Pseudoephedrine", "dosing": "60mg · q4-6h PRN · 7 days", "pharmacy": "CVS - Main St"},
+    {"name": "Guaifenesin", "dosing": "400mg · q4h PRN · 5 days", "pharmacy": "CVS - Main St"}
+  ],
+  "soap": {
+    "subjective": "Patient presents with chief complaint of upper respiratory symptoms.",
+    "objective": "Vitals within normal limits. Oropharynx mildly erythematous. No exudate.",
+    "assessment": "Acute upper respiratory infection, likely viral etiology.",
+    "plan": "Supportive care, OTC medications, return precautions discussed."
+  }
+}`;
+
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, stream: false }),
+      });
+
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+      const text: string = data.reply || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("No JSON found in response");
+      const parsed = JSON.parse(jsonMatch[0]) as CarePlan;
+      setCarePlan(parsed);
+      // Pre-fill SOAP edits
+      setSoapEdits(parsed.soap);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function setStatus(key: string, status: SectionStatus) {
+    setStatuses(prev => ({ ...prev, [key]: prev[key] === status ? "idle" : status }));
+  }
+
+  const lowestRiskDDX = carePlan?.ddx.reduce((best, cur) => {
+    const riskOrder = { low: 0, medium: 1, high: 2 };
+    return riskOrder[cur.legalRisk] < riskOrder[best.legalRisk] ? cur : best;
+  }, carePlan.ddx[0]);
+
+  return (
+    <div className="flex flex-col h-full bg-gray-950">
+      {/* Top bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-5 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="text-gray-500 hover:text-white transition-colors text-sm flex items-center gap-1">
@@ -169,266 +249,339 @@ Medical History: ${patient.medicalHistory.join(", ")}`
           <div className="h-4 w-px bg-gray-700" />
           <div>
             <span className="text-white font-semibold">{patient.name}</span>
-            <span className="text-gray-400 text-sm ml-2">· Age {patient.age} · {aptTime} · {patient.insuranceProvider}</span>
+            <span className="text-gray-400 text-sm ml-2">· Age {patient.age} · DOB {patient.dateOfBirth} · {aptTime}</span>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className={cn("text-xs px-2.5 py-1 rounded-full border", appointment.status === "checked-in" ? "text-green-400 bg-green-900/20 border-green-700/40" : "text-gray-400 bg-gray-800 border-gray-700")}>{appointment.status.replace("-", " ")}</span>
-          <button onClick={() => setSigned(true)} disabled={signed} className={cn("px-4 py-1.5 rounded-lg text-sm font-medium transition-colors", signed ? "bg-green-700 text-green-100" : "bg-green-600 hover:bg-green-700 text-white")}>
-            {signed ? "✓ Encounter Signed" : "Sign Encounter"}
+          <span className={cn("text-xs px-2.5 py-1 rounded-full border", hasScopeWarning ? "text-amber-400 bg-amber-900/20 border-amber-700/40" : "text-teal-400 bg-teal-900/20 border-teal-700/40")}>
+            {hasScopeWarning ? "⚠ Scope Review" : "✓ Within Scope"}
+          </span>
+          <span className="text-xs px-2.5 py-1 rounded-full bg-gray-800 border border-gray-700 text-gray-300">
+            {patient.insuranceProvider}
+          </span>
+          <button
+            onClick={() => setSigned(true)}
+            disabled={signed}
+            className={cn("px-4 py-1.5 rounded-lg text-sm font-medium transition-colors", signed ? "bg-green-700 text-green-100" : "bg-green-600 hover:bg-green-700 text-white")}
+          >
+            {signed ? "✓ Signed" : "Sign Chart"}
           </button>
         </div>
       </div>
 
-      {/* Patient quick stats */}
-      <div className="bg-gray-950 border-b border-gray-800 px-5 py-2 flex items-center gap-6 flex-shrink-0 overflow-x-auto">
-        {[
-          { label: "Allergies", value: patient.allergies.join(", "), color: "text-red-400" },
-          { label: "Medications", value: patient.medications.join(", "), color: "text-blue-400" },
-          { label: "PMH", value: patient.medicalHistory.join(", "), color: "text-purple-400" },
-          { label: "Revenue/Visit", value: `$${patient.revenuePerVisit}`, color: "text-emerald-400" },
-          { label: "Pay Reliability", value: `${patient.paymentReliability}%`, color: "text-green-400" },
-        ].map(item => (
-          <div key={item.label} className="flex-shrink-0">
-            <span className="text-xs text-gray-600">{item.label}: </span>
-            <span className={cn("text-xs font-medium", item.color)}>{item.value}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Tab bar */}
-      <div className="border-b border-gray-800 px-5 flex gap-1 flex-shrink-0 bg-gray-950">
-        {tabList.map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)} className={cn("px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px", activeTab === t.id ? "border-blue-500 text-blue-400" : "border-transparent text-gray-500 hover:text-gray-300")}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto">
-
-        {/* PRE-CHART */}
-        {activeTab === "prechart" && (
-          <div className="p-5 max-w-4xl">
-            <div className="mb-4">
-              <label className="text-xs text-gray-400 block mb-1.5">History of Present Illness (HPI)</label>
-              <textarea value={hpi} onChange={e => setHpi(e.target.value)} rows={4} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder={`Document the HPI for ${patient.name}... (onset, location, duration, character, aggravating/alleviating factors, radiation, timing, severity)`} />
+      {/* Body */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left panel */}
+        <div className="w-72 border-r border-gray-800 overflow-y-auto bg-gray-900/50 flex-shrink-0 p-4 space-y-4">
+          {/* Patient Header */}
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold">
+              {getInitials(patient.name)}
             </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-medium text-white">AI Pre-Visit Summary</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Evidence-based clinical briefing</p>
-                </div>
-                <button onClick={runPreChart} disabled={preChart.loading} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
-                  {preChart.loading && <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                  {preChart.loading ? "Generating..." : "Generate Pre-Chart"}
-                </button>
-              </div>
-              {preChart.output ? (
-                <div className="relative">
-                  <pre className="whitespace-pre-wrap text-sm text-gray-300 font-sans leading-relaxed">{preChart.output}</pre>
-                  {preChart.loading && <span className="inline-block w-0.5 h-4 bg-blue-400 animate-pulse ml-0.5 align-middle" />}
-                </div>
-              ) : (
-                <p className="text-gray-600 text-sm">Click &quot;Generate Pre-Chart&quot; to get a comprehensive AI-powered pre-visit clinical briefing.</p>
-              )}
+            <div>
+              <p className="font-semibold text-white">{patient.name}</p>
+              <p className="text-xs text-gray-400">DOB: {patient.dateOfBirth}</p>
+              <p className="text-xs text-gray-400">Age {patient.age}</p>
             </div>
           </div>
-        )}
 
-        {/* VITALS & ROS */}
-        {activeTab === "vitals" && (
-          <div className="p-5 max-w-5xl space-y-5">
-            {/* Vitals */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h3 className="font-medium text-white mb-4">Vital Signs</h3>
-              <div className="grid grid-cols-4 gap-4">
-                {([
-                  { key: "bp", label: "Blood Pressure", placeholder: "120/80", unit: "mmHg" },
-                  { key: "hr", label: "Heart Rate", placeholder: "72", unit: "bpm" },
-                  { key: "temp", label: "Temperature", placeholder: "98.6", unit: "°F" },
-                  { key: "rr", label: "Resp Rate", placeholder: "16", unit: "/min" },
-                  { key: "o2sat", label: "O₂ Saturation", placeholder: "98", unit: "%" },
-                  { key: "weight", label: "Weight", placeholder: "150", unit: "lbs" },
-                  { key: "height", label: "Height", placeholder: "5'8\"", unit: "" },
-                  { key: "bmi", label: "BMI", placeholder: "Auto-calc", unit: "kg/m²" },
-                ] as const).map(f => (
-                  <div key={f.key}>
-                    <label className="text-xs text-gray-500 block mb-1">{f.label}</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={vitals[f.key]}
-                        onChange={e => setVitals(v => ({ ...v, [f.key]: e.target.value }))}
-                        placeholder={f.placeholder}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
-                      />
-                      {f.unit && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-600">{f.unit}</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {/* Digital Voicemail */}
+          <div className="bg-gray-800 rounded-xl p-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-xs font-semibold text-teal-400">📱 Digital Voicemail</span>
+              <span className="text-xs text-gray-500 ml-auto">{aptTime}</span>
             </div>
-
-            {/* ROS */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-medium text-white">Review of Systems</h3>
-                  <p className="text-xs text-gray-500 mt-0.5"><span className="text-green-400 font-bold">−</span> = Negative &nbsp;·&nbsp; <span className="text-red-400 font-bold">+</span> = Positive &nbsp;·&nbsp; <span className="text-gray-600">·</span> = Not asked</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-500">{rosPositives.length} positive · {rosNegatives.length} negative</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {ROS_SYSTEMS.map(system => (
-                  <div key={system.key} className="bg-gray-800/50 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">{system.label}</p>
-                    <div className="space-y-1.5">
-                      {system.symptoms.map(symptom => {
-                        const val = ros[system.key]?.[symptom] ?? "unset";
-                        return (
-                          <div key={symptom} className="flex items-center gap-2">
-                            <ROSCheckbox value={val} onChange={v => setROSValue(system.key, symptom, v)} />
-                            <span className={cn("text-xs", val === "positive" ? "text-red-300" : val === "negative" ? "text-gray-400" : "text-gray-600")}>{symptom}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Physical Exam */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h3 className="font-medium text-white mb-4">Physical Examination</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {PE_SYSTEMS.map(system => (
-                  <div key={system.key} className="bg-gray-800/50 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">{system.label}</p>
-                    <div className="space-y-1.5">
-                      {system.findings.map(finding => (
-                        <label key={finding} className="flex items-center gap-2 cursor-pointer group">
-                          <input type="checkbox" checked={!!pe[system.key]?.[finding]} onChange={() => togglePE(system.key, finding)} className="w-3.5 h-3.5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0 focus:ring-offset-0" />
-                          <span className={cn("text-xs transition-colors", pe[system.key]?.[finding] ? "text-gray-300" : "text-gray-600 group-hover:text-gray-500")}>{finding}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <p className="text-xs text-gray-300">&quot;I&apos;ve been having {patient.primaryComplaint?.toLowerCase()} and wanted to get checked out. My {patient.medications[0] ? `${patient.medications[0]} doesn&apos;t seem to be helping` : "symptoms are persistent"}.&quot;</p>
           </div>
-        )}
 
-        {/* SOAP NOTE */}
-        {activeTab === "soap" && (
-          <div className="p-5 max-w-4xl">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-medium text-white">AI SOAP Note Generator</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Uses HPI, vitals, ROS, and PE from this encounter</p>
-                </div>
-                <button
-                  onClick={async () => {
-                    const vitalStr = Object.entries(vitals).filter(([, v]) => v).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(", ");
-                    await soapAI.run(
-                      "Generate a complete, clinically rigorous SOAP note with four clearly labeled sections: SUBJECTIVE, OBJECTIVE, ASSESSMENT, PLAN. In ASSESSMENT include the primary diagnosis with ICD-10 code, up to 3 differential diagnoses, and clinical reasoning. In PLAN include CPT codes for all services, prescriptions with dosing, follow-up timeline, and patient education points.",
-                      `Patient: ${patient.name}, Age: ${patient.age}\nChief Complaint: ${patient.primaryComplaint}\nHPI: ${hpi || "Not documented"}\nMedical History: ${patient.medicalHistory.join(", ")}\nMedications: ${patient.medications.join(", ")}\nAllergies: ${patient.allergies.join(", ")}\nVitals: ${vitalStr || "Not recorded"}\nROS Positives: ${rosPositives.join("; ") || "None documented"}\nROS Negatives: ${rosNegatives.slice(0, 8).join("; ") || "None documented"}\nPhysical Exam: ${peFindings.join(" | ") || "Not documented"}`
-                    );
-                  }}
-                  disabled={soapAI.loading}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-                >
-                  {soapAI.loading && <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                  {soapAI.loading ? "Generating..." : "AI Generate SOAP"}
-                </button>
-              </div>
-              {soapAI.output && (
-                <div className="mb-4 p-4 bg-gray-800 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs text-gray-400">AI Draft — click &quot;Apply to Fields&quot; to populate the sections below</p>
-                    <button onClick={() => parseSoapFromOutput(soapAI.output)} className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">Apply to Fields</button>
-                  </div>
-                  <pre className="whitespace-pre-wrap text-xs text-gray-300 font-sans leading-relaxed max-h-48 overflow-y-auto">{soapAI.output}{soapAI.loading && <span className="inline-block w-0.5 h-3 bg-blue-400 animate-pulse ml-0.5 align-middle" />}</pre>
-                </div>
-              )}
+          {/* Check-In */}
+          <div className="bg-gray-800 rounded-xl p-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-xs font-semibold text-blue-400">🏥 Waiting Room Check-In</span>
+              <span className="text-xs text-gray-500 ml-auto">{aptTime}</span>
             </div>
+            <p className="text-xs text-gray-300">{patient.hpiPreview}</p>
+          </div>
 
-            <div className="space-y-3">
-              {(["subjective", "objective", "assessment", "plan"] as const).map(field => (
-                <div key={field} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">{field}</label>
-                  <textarea
-                    value={soap[field]}
-                    onChange={e => setSoap(s => ({ ...s, [field]: e.target.value }))}
-                    rows={field === "plan" ? 6 : 4}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                    placeholder={`${field.charAt(0).toUpperCase() + field.slice(1)}...`}
+          {/* Chief Complaint */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Chief Complaint</p>
+            <p className="text-base font-bold text-white">{patient.primaryComplaint}</p>
+          </div>
+
+          {/* Vitals */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Vitals</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { key: "bp", label: "BP", placeholder: "120/80", color: "text-red-400" },
+                { key: "hr", label: "HR", placeholder: "72 bpm", color: "text-orange-400" },
+                { key: "temp", label: "Temp", placeholder: "98.6°F", color: "text-yellow-400" },
+                { key: "spo2", label: "SpO₂", placeholder: "98%", color: "text-teal-400" },
+              ].map(v => (
+                <div key={v.key} className={cn("bg-gray-800 rounded-lg px-2 py-1.5 border border-gray-700")}>
+                  <p className={cn("text-xs font-semibold", v.color)}>{v.label}</p>
+                  <input
+                    type="text"
+                    value={vitals[v.key as keyof typeof vitals]}
+                    onChange={e => setVitals(prev => ({ ...prev, [v.key]: e.target.value }))}
+                    placeholder={v.placeholder}
+                    className="w-full bg-transparent text-xs text-gray-300 focus:outline-none placeholder-gray-600 mt-0.5"
                   />
                 </div>
               ))}
             </div>
           </div>
-        )}
 
-        {/* BILLING */}
-        {activeTab === "billing" && (
-          <div className="p-5 max-w-4xl space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <label className="text-xs text-gray-400 block mb-1.5">ICD-10 Codes</label>
-                <textarea value={icd10} onChange={e => setIcd10(e.target.value)} rows={4} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="J06.9 - Acute URI&#10;Z23 - Immunization encounter&#10;..." />
-              </div>
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <label className="text-xs text-gray-400 block mb-1.5">CPT Codes</label>
-                <textarea value={cpt} onChange={e => setCpt(e.target.value)} rows={4} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="99213 - Office visit, low complexity&#10;93000 - 12-lead ECG&#10;..." />
-              </div>
-            </div>
-
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-medium text-white">AI Billing Analysis</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">E&M level justification, code optimization, denial prevention</p>
-                </div>
-                <button onClick={runBillingAnalysis} disabled={billingAI.loading} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
-                  {billingAI.loading && <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                  {billingAI.loading ? "Analyzing..." : "Optimize Billing"}
-                </button>
-              </div>
-              {billingAI.output ? (
-                <pre className="whitespace-pre-wrap text-sm text-gray-300 font-sans leading-relaxed">{billingAI.output}{billingAI.loading && <span className="inline-block w-0.5 h-4 bg-blue-400 animate-pulse ml-0.5 align-middle" />}</pre>
-              ) : (
-                <p className="text-gray-600 text-sm">Run AI billing analysis to get E&M level recommendations, CPT code optimization, and denial prevention tips specific to this payer.</p>
-              )}
-            </div>
-
-            {/* Revenue summary */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <h3 className="text-sm font-medium text-white mb-3">Encounter Revenue Summary</h3>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center p-3 bg-gray-800 rounded-lg">
-                  <p className="text-xs text-gray-500">Est. Revenue</p>
-                  <p className="text-xl font-bold text-emerald-400 mt-1">${appointment.estimatedRevenue}</p>
-                </div>
-                <div className="text-center p-3 bg-gray-800 rounded-lg">
-                  <p className="text-xs text-gray-500">Value Score</p>
-                  <p className="text-xl font-bold text-blue-400 mt-1">{patient.valueScore}</p>
-                </div>
-                <div className="text-center p-3 bg-gray-800 rounded-lg">
-                  <p className="text-xs text-gray-500">Pay Reliability</p>
-                  <p className="text-xl font-bold text-green-400 mt-1">{patient.paymentReliability}%</p>
-                </div>
-              </div>
+          {/* Allergies */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Allergies</p>
+            <div className="flex flex-wrap gap-1.5">
+              {patient.allergies.filter(a => a !== "None").length > 0
+                ? patient.allergies.filter(a => a !== "None").map(a => (
+                    <span key={a} className="text-xs px-2 py-0.5 bg-red-900/30 text-red-400 border border-red-700/40 rounded-full">⚠ {a}</span>
+                  ))
+                : <span className="text-xs text-gray-500">NKDA</span>
+              }
             </div>
           </div>
-        )}
+
+          {/* Medications */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Current Medications</p>
+            <ul className="space-y-1">
+              {patient.medications.map(m => (
+                <li key={m} className="text-xs text-gray-300 flex items-start gap-1.5">
+                  <span className="text-teal-400 mt-0.5">•</span> {m}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Medical History */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Medical History</p>
+            <ul className="space-y-1">
+              {patient.medicalHistory.map(h => (
+                <li key={h} className="text-xs text-gray-300 flex items-start gap-1.5">
+                  <span className="text-purple-400 mt-0.5">•</span> {h}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Right panel: AI Care Plan Studio */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white">AI Care Plan Studio</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Evidence-based clinical decision support for {patient.name}</p>
+            </div>
+            <button
+              onClick={generateCarePlan}
+              disabled={generating}
+              className="flex items-center gap-2 px-5 py-2.5 bg-teal-500 hover:bg-teal-600 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+            >
+              {generating && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              {generating ? "Generating..." : "Generate AI Care Plan"}
+            </button>
+          </div>
+
+          {error && (
+            <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4 text-red-400 text-sm">{error}</div>
+          )}
+
+          {!carePlan && !generating && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+              <p className="text-gray-500 text-sm">Click &quot;Generate AI Care Plan&quot; to create a comprehensive, evidence-based care plan for this patient.</p>
+            </div>
+          )}
+
+          {carePlan && (
+            <>
+              {/* Assessment */}
+              <ClinicalCard
+                title="Assessment"
+                section={carePlan.assessment}
+                status={statuses["assessment"] ?? "idle"}
+                onAccept={() => setStatus("assessment", "accepted")}
+                onReject={() => setStatus("assessment", "rejected")}
+              />
+
+              {/* Diagnostics */}
+              <ClinicalCard
+                title="Diagnostics"
+                section={carePlan.diagnostics}
+                status={statuses["diagnostics"] ?? "idle"}
+                onAccept={() => setStatus("diagnostics", "accepted")}
+                onReject={() => setStatus("diagnostics", "rejected")}
+              />
+
+              {/* Treatment Plan */}
+              <ClinicalCard
+                title="Treatment Plan"
+                section={carePlan.treatmentPlan}
+                status={statuses["treatmentPlan"] ?? "idle"}
+                onAccept={() => setStatus("treatmentPlan", "accepted")}
+                onReject={() => setStatus("treatmentPlan", "rejected")}
+              />
+
+              {/* Patient Education */}
+              <ClinicalCard
+                title="Patient Education"
+                section={carePlan.patientEducation}
+                status={statuses["patientEducation"] ?? "idle"}
+                onAccept={() => setStatus("patientEducation", "accepted")}
+                onReject={() => setStatus("patientEducation", "rejected")}
+              />
+
+              {/* Follow-Up */}
+              <ClinicalCard
+                title="Follow-up & Red Flags"
+                section={carePlan.followUp}
+                status={statuses["followUp"] ?? "idle"}
+                onAccept={() => setStatus("followUp", "accepted")}
+                onReject={() => setStatus("followUp", "rejected")}
+              />
+
+              {/* DDX */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+                  <h3 className="font-semibold text-white text-sm">Differential Diagnosis Options (DDX)</h3>
+                  <button className="text-xs text-teal-400 hover:text-teal-300 border border-teal-700/40 px-2.5 py-1 rounded transition-colors">
+                    Select if rejecting primary
+                  </button>
+                </div>
+                <div className="p-4 space-y-3">
+                  {carePlan.ddx.map((item, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedDDX(i === selectedDDX ? null : i)}
+                      className={cn(
+                        "w-full text-left p-3 rounded-xl border transition-all",
+                        item.recommended ? "border-teal-600/60 bg-teal-900/10" : "border-gray-700 bg-gray-800/50",
+                        selectedDDX === i && "ring-2 ring-teal-500"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0", selectedDDX === i || item.recommended ? "border-teal-400" : "border-gray-600")}>
+                          {(selectedDDX === i || (selectedDDX === null && item.recommended)) && (
+                            <div className="w-2 h-2 rounded-full bg-teal-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-white text-sm">{item.diagnosis}</span>
+                            <span className="text-xs px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono">{item.icd10}</span>
+                            <span className="text-xs text-gray-400">{item.confidence}%</span>
+                            <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", item.legalRisk === "low" ? "bg-green-900/40 text-green-400" : item.legalRisk === "medium" ? "bg-orange-900/40 text-orange-400" : "bg-red-900/40 text-red-400")}>
+                              {item.legalRisk} risk
+                            </span>
+                            {item.recommended && (
+                              <span className="text-xs px-2 py-0.5 bg-teal-900/40 text-teal-400 rounded-full">Recommended</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+
+                  {/* Lowest Legal Risk */}
+                  {lowestRiskDDX && (
+                    <div className="mt-2 px-3 py-2 bg-green-900/20 border border-green-700/40 rounded-lg">
+                      <p className="text-xs text-green-400 font-medium">Lowest Legal Risk Option: {lowestRiskDDX.diagnosis}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Prescriptions */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+                  <h3 className="font-semibold text-white text-sm">Prescription Orders</h3>
+                  {carePlan.prescriptions[0] && (
+                    <span className="text-xs text-teal-400 font-medium">{carePlan.prescriptions[0].pharmacy}</span>
+                  )}
+                </div>
+                <div className="p-4 space-y-3">
+                  {carePlan.prescriptions.map((rx, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-800 rounded-xl p-3">
+                      <div>
+                        <p className="font-medium text-white text-sm">{rx.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{rx.dosing}</p>
+                      </div>
+                      <button
+                        onClick={() => setStatus(`rx-${i}`, statuses[`rx-${i}`] === "accepted" ? "idle" : "accepted")}
+                        className={cn("text-xs px-3 py-1.5 rounded-lg border transition-colors", statuses[`rx-${i}`] === "accepted" ? "bg-teal-900/40 text-teal-400 border-teal-700/40" : "border-gray-700 text-gray-400 hover:border-teal-500 hover:text-teal-400")}
+                      >
+                        {statuses[`rx-${i}`] === "accepted" ? "✓ Accepted" : "Accept"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Integrated Clinical Note - Drop Chart */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-800">
+                  <h3 className="font-semibold text-white text-sm">Integrated Clinical Note — Drop Chart</h3>
+                </div>
+                <div className="p-4 space-y-4">
+                  {(["subjective", "objective", "assessment", "plan"] as const).map(field => {
+                    const isEditing = !!editingSOAP[field];
+                    const text = soapEdits[field] ?? carePlan.soap[field];
+                    return (
+                      <div key={field} className="bg-gray-800 rounded-xl p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{field}</span>
+                          <button
+                            onClick={() => setEditingSOAP(prev => ({ ...prev, [field]: !prev[field] }))}
+                            className="text-xs text-gray-500 hover:text-white transition-colors"
+                          >
+                            ✏ {isEditing ? "Done" : "Edit"}
+                          </button>
+                        </div>
+                        {isEditing ? (
+                          <textarea
+                            value={text}
+                            onChange={e => setSoapEdits(prev => ({ ...prev, [field]: e.target.value }))}
+                            rows={3}
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                          />
+                        ) : (
+                          <p className="text-sm text-gray-300 leading-relaxed">{text}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Chart Options */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <p className="text-sm font-semibold text-white mb-3">Chart Options</p>
+                <div className="flex gap-4">
+                  {[
+                    { value: "ehr", label: "Link to Company EHR (Epic, Cerner, etc.)" },
+                    { value: "standalone", label: "Use as Standalone EHR Record" },
+                  ].map(opt => (
+                    <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                      <div
+                        onClick={() => setChartMode(opt.value as "ehr" | "standalone")}
+                        className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center cursor-pointer", chartMode === opt.value ? "border-teal-400" : "border-gray-600")}
+                      >
+                        {chartMode === opt.value && <div className="w-2 h-2 rounded-full bg-teal-400" />}
+                      </div>
+                      <span className="text-sm text-gray-300">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

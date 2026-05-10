@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import type { Patient } from "@/lib/types";
 
 function ScoreBadge({ score }: { score: number }) {
-  const cls = score >= 90 ? "text-green-400 bg-green-900/20 border-green-700/40" : score >= 80 ? "text-blue-400 bg-blue-900/20 border-blue-700/40" : "text-yellow-400 bg-yellow-900/20 border-yellow-700/40";
+  const cls = score >= 90 ? "text-green-400 bg-green-900/20 border-green-700/40" : score >= 80 ? "text-teal-400 bg-teal-900/20 border-teal-700/40" : "text-yellow-400 bg-yellow-900/20 border-yellow-700/40";
   return <span className={cn("text-xs px-2 py-0.5 rounded-full border font-semibold", cls)}>{score}</span>;
 }
 
@@ -93,7 +93,7 @@ Value Score: ${patient.valueScore} | Payment Reliability: ${patient.paymentRelia
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-2">Medical History</p>
-              <div className="space-y-1">{patient.medicalHistory.map(h => <p key={h} className="text-xs text-blue-400">{h}</p>)}</div>
+              <div className="space-y-1">{patient.medicalHistory.map(h => <p key={h} className="text-xs text-teal-400">{h}</p>)}</div>
             </div>
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-2">Medications</p>
@@ -108,7 +108,7 @@ Value Score: ${patient.valueScore} | Payment Reliability: ${patient.paymentRelia
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-medium text-white">AI Patient Insight</p>
-              <button onClick={generateInsight} disabled={loading} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
+              <button onClick={generateInsight} disabled={loading} className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
                 {loading ? "Analyzing..." : "Generate Insight"}
               </button>
             </div>
@@ -155,7 +155,7 @@ export function PatientsTab() {
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <p className="text-xs text-gray-500">Avg Value Score</p>
-          <p className="text-2xl font-bold text-blue-400 mt-1">{avgScore.toFixed(1)}</p>
+          <p className="text-2xl font-bold text-teal-400 mt-1">{avgScore.toFixed(1)}</p>
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <p className="text-xs text-gray-500">Avg Revenue/Visit</p>
@@ -174,9 +174,9 @@ export function PatientsTab() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search patients, insurance, complaints..."
-            className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
-          <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500">
             <option value="valueScore">Sort: Value Score</option>
             <option value="revenuePerVisit">Sort: Revenue/Visit</option>
             <option value="paymentReliability">Sort: Payment Reliability</option>

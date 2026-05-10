@@ -68,7 +68,7 @@ export function SettingsTab() {
         <div className="w-48 flex-shrink-0">
           <nav className="space-y-1">
             {settingTabs.map(t => (
-              <button key={t.id} onClick={() => setActiveTab(t.id)} className={cn("w-full text-left px-3 py-2 rounded-lg text-sm transition-colors", activeTab === t.id ? "bg-blue-600/20 text-blue-400 font-medium" : "text-gray-400 hover:text-white hover:bg-gray-800")}>
+              <button key={t.id} onClick={() => setActiveTab(t.id)} className={cn("w-full text-left px-3 py-2 rounded-lg text-sm transition-colors", activeTab === t.id ? "bg-teal-600/20 text-teal-400 font-medium" : "text-gray-400 hover:text-white hover:bg-gray-800")}>
                 {t.label}
               </button>
             ))}
@@ -83,31 +83,31 @@ export function SettingsTab() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Full Name</label>
-                  <input value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Specialty</label>
-                  <input value={profile.specialty} onChange={e => setProfile(p => ({ ...p, specialty: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={profile.specialty} onChange={e => setProfile(p => ({ ...p, specialty: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Email</label>
-                  <input value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Phone</label>
-                  <input value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">State</label>
-                  <input value={profile.state} onChange={e => setProfile(p => ({ ...p, state: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={profile.state} onChange={e => setProfile(p => ({ ...p, state: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Credentials</label>
-                  <input value={profile.credentials} onChange={e => setProfile(p => ({ ...p, credentials: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={profile.credentials} onChange={e => setProfile(p => ({ ...p, credentials: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs text-gray-400 block mb-1">Address</label>
-                  <input value={profile.address} onChange={e => setProfile(p => ({ ...p, address: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={profile.address} onChange={e => setProfile(p => ({ ...p, address: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
               </div>
             </div>
@@ -122,7 +122,7 @@ export function SettingsTab() {
               ].map(f => (
                 <div key={f.key}>
                   <label className="text-xs text-gray-400 block mb-1">{f.label}</label>
-                  <input value={profile[f.key]} onChange={e => setProfile(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.hint} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+                  <input value={profile[f.key]} onChange={e => setProfile(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.hint} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono" />
                 </div>
               ))}
               <div className="mt-4 pt-4 border-t border-gray-800">
@@ -155,7 +155,7 @@ export function SettingsTab() {
                 ].map(f => (
                   <div key={f.key}>
                     <label className="text-xs text-gray-400 block mb-1">{f.label}</label>
-                    <input value={practiceSettings[f.key]} onChange={e => setPracticeSettings(p => ({ ...p, [f.key]: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input value={practiceSettings[f.key]} onChange={e => setPracticeSettings(p => ({ ...p, [f.key]: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                   </div>
                 ))}
               </div>
@@ -168,7 +168,7 @@ export function SettingsTab() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Model</label>
-                  <select value={aiSettings.model} onChange={e => setAiSettings(s => ({ ...s, model: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <select value={aiSettings.model} onChange={e => setAiSettings(s => ({ ...s, model: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500">
                     <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Recommended)</option>
                     <option value="claude-opus-4-7">Claude Opus 4.7 (Most Capable)</option>
                     <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Fastest)</option>
@@ -176,12 +176,12 @@ export function SettingsTab() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Max Tokens</label>
-                  <input value={aiSettings.maxTokens} onChange={e => setAiSettings(s => ({ ...s, maxTokens: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={aiSettings.maxTokens} onChange={e => setAiSettings(s => ({ ...s, maxTokens: e.target.value }))} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">System Prompt</label>
-                <textarea value={aiSettings.systemPrompt} onChange={e => setAiSettings(s => ({ ...s, systemPrompt: e.target.value }))} rows={4} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                <textarea value={aiSettings.systemPrompt} onChange={e => setAiSettings(s => ({ ...s, systemPrompt: e.target.value }))} rows={4} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />
               </div>
               <div className="space-y-3 pt-2">
                 {[
@@ -194,7 +194,7 @@ export function SettingsTab() {
                       <p className="text-sm text-white">{toggle.label}</p>
                       <p className="text-xs text-gray-500">{toggle.desc}</p>
                     </div>
-                    <button onClick={() => setAiSettings(s => ({ ...s, [toggle.key]: !s[toggle.key] }))} className={cn("w-10 h-6 rounded-full transition-colors relative", aiSettings[toggle.key] ? "bg-blue-600" : "bg-gray-700")}>
+                    <button onClick={() => setAiSettings(s => ({ ...s, [toggle.key]: !s[toggle.key] }))} className={cn("w-10 h-6 rounded-full transition-colors relative", aiSettings[toggle.key] ? "bg-teal-600" : "bg-gray-700")}>
                       <span className={cn("absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform", aiSettings[toggle.key] ? "translate-x-4" : "translate-x-0")} />
                     </button>
                   </div>
@@ -228,7 +228,7 @@ export function SettingsTab() {
                 <p className="text-xs text-gray-500 mb-2">Modifier Defaults</p>
                 <div className="flex gap-2 flex-wrap">
                   {["25 - Significant separate E/M", "59 - Distinct procedural service", "GT - Via interactive audio/video"].map(mod => (
-                    <span key={mod} className="text-xs px-2 py-1 bg-blue-900/20 text-blue-400 border border-blue-800/40 rounded">{mod}</span>
+                    <span key={mod} className="text-xs px-2 py-1 bg-teal-900/20 text-teal-400 border border-teal-800/40 rounded">{mod}</span>
                   ))}
                 </div>
               </div>
@@ -236,7 +236,7 @@ export function SettingsTab() {
           )}
 
           <div className="mt-4 flex justify-end">
-            <button onClick={handleSave} className={cn("px-5 py-2 rounded-lg text-sm font-medium transition-colors", saved ? "bg-green-600 text-white" : "bg-blue-600 hover:bg-blue-700 text-white")}>
+            <button onClick={handleSave} className={cn("px-5 py-2 rounded-lg text-sm font-medium transition-colors", saved ? "bg-green-600 text-white" : "bg-teal-600 hover:bg-teal-700 text-white")}>
               {saved ? "✓ Saved" : "Save Changes"}
             </button>
           </div>

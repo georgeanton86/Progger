@@ -15,6 +15,7 @@ export type Patient = {
   insuranceProvider: string | null;
   insurancePlan: string | null;
   primaryComplaint: string | null;
+  hpiPreview: string;
   medicalHistory: string[];
   medications: string[];
   allergies: string[];
@@ -79,6 +80,7 @@ export type DashboardStats = {
   completedEncounters: number;
   pendingSignatures: number;
   estimatedRevenue: number;
+  revenueToday: number;
   avgEncounterTime: number;
   patientSatisfaction: number;
 };
