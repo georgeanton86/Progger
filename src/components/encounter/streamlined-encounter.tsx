@@ -70,6 +70,25 @@ type BillingIntelligence = {
   documentationRequired: string[];
 };
 
+type RecurringCode = {
+  code: string;
+  name: string;
+  category: string;
+  monthlyRevenue: number;
+  annualRevenue: number;
+  requirement: string;
+  eligible: boolean;
+  enrollmentAction: string;
+};
+
+type RecurringRevenue = {
+  qualifies: boolean;
+  codes: RecurringCode[];
+  totalMonthly: number;
+  totalAnnual: number;
+  enrollmentNote: string;
+};
+
 type QualityMeasure = {
   measure: string;
   hedis: string;
@@ -108,6 +127,7 @@ type CarePlan = {
   prescriptions: PrescriptionItem[];
   soap: SOAPNote;
   billing: BillingIntelligence;
+  recurringRevenue: RecurringRevenue;
   upsells: UpsellItem[];
   qualityMeasures: QualityMeasure[];
   liabilityFlags: LiabilityFlag[];
@@ -437,8 +457,87 @@ Return this exact JSON:
       "revenue": 185,
       "qualityMeasure": "HEDIS measure satisfied by return visit"
     }
-  ]
-}`,
+  ],
+  "recurringRevenue": {
+    "qualifies": true,
+    "codes": [
+      {
+        "code": "99490",
+        "name": "Chronic Care Management",
+        "category": "CCM",
+        "monthlyRevenue": 62,
+        "annualRevenue": 744,
+        "requirement": "2+ chronic conditions expected to last 12+ months, 20+ min care management per month. No face-to-face required.",
+        "eligible": true,
+        "enrollmentAction": "Obtain written CCM consent today. Create formal care plan in chart. Assign care coordinator."
+      },
+      {
+        "code": "99487",
+        "name": "Complex CCM",
+        "category": "CCM",
+        "monthlyRevenue": 134,
+        "annualRevenue": 1608,
+        "requirement": "Complex chronic conditions, 60+ min care management per month, moderate-high complexity MDM",
+        "eligible": false,
+        "enrollmentAction": "N/A — complexity threshold not met at this time"
+      },
+      {
+        "code": "99454",
+        "name": "Remote Patient Monitoring — Device Supply",
+        "category": "RPM",
+        "monthlyRevenue": 55,
+        "annualRevenue": 660,
+        "requirement": "Chronic condition benefiting from remote monitoring (CHF, HTN, DM). Device used 16+ days/month.",
+        "eligible": false,
+        "enrollmentAction": "N/A — patient does not have qualifying chronic condition for RPM at this time"
+      },
+      {
+        "code": "99457",
+        "name": "Remote Patient Monitoring — Management",
+        "category": "RPM",
+        "monthlyRevenue": 54,
+        "annualRevenue": 648,
+        "requirement": "20+ min clinical staff time/month reviewing RPM data and communicating with patient",
+        "eligible": false,
+        "enrollmentAction": "N/A — RPM device supply (99454) must be enrolled first"
+      },
+      {
+        "code": "G0438",
+        "name": "Annual Wellness Visit — Initial",
+        "category": "AWV",
+        "monthlyRevenue": 0,
+        "annualRevenue": 185,
+        "requirement": "Medicare Part B or Medicare Advantage patient. Never had AWV before OR G0439 if subsequent year.",
+        "eligible": false,
+        "enrollmentAction": "N/A — patient not on Medicare"
+      },
+      {
+        "code": "G0507",
+        "name": "Behavioral Health Integration",
+        "category": "BHI",
+        "monthlyRevenue": 50,
+        "annualRevenue": 600,
+        "requirement": "Behavioral health diagnosis (GAD, depression, PTSD, etc.). 20+ min care integration per month.",
+        "eligible": false,
+        "enrollmentAction": "N/A — no behavioral health diagnosis"
+      }
+    ],
+    "totalMonthly": 62,
+    "totalAnnual": 744,
+    "enrollmentNote": "CCM consent form required at this visit. Patient must verbally agree and sign consent. Bill 99490 starting month of enrollment."
+  }
+}
+
+RECURRING REVENUE INSTRUCTIONS:
+- CCM (99490/99487): Eligible if patient has 2+ chronic conditions (HTN, DM, COPD, CHF, CKD, obesity, hypothyroidism, anxiety, depression, asthma, CAD, afib, etc.) expected to last 12+ months
+- Complex CCM (99487): Eligible if patient has 3+ complex chronic conditions AND you expect 60+ min/month of care management
+- RPM (99454+99457): Eligible if patient has CHF, uncontrolled HTN, uncontrolled DM, COPD requiring monitoring. Set eligible=true for both codes if qualifying.
+- AWV (G0438/G0439): Eligible ONLY if insuranceProvider includes "Medicare". G0438 if first AWV ever, G0439 if annual renewal. Set monthlyRevenue=0, annualRevenue=185. Set eligible=true.
+- BHI (G0507): Eligible if patient has ANY behavioral health diagnosis (anxiety, depression, PTSD, bipolar, ADHD, etc.)
+- Set qualifies=true if ANY code has eligible=true
+- Calculate totalMonthly as sum of monthlyRevenue for all eligible codes
+- Calculate totalAnnual as sum of annualRevenue for all eligible codes
+- BILLING STRATEGY NOTE: Keep visits 12-18 minutes, bill via MDM complexity (not time), then layer these monthly recurring codes. A patient with CCM + RPM + BHI generates $166+/month with ZERO additional face-to-face visits.`,
         }),
       });
       if (!res.ok) throw new Error(`API ${res.status}`);
@@ -518,9 +617,16 @@ Return this exact JSON:
             </span>
           )}
           {carePlan && (
-            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-900/20 text-emerald-400 border border-emerald-700/40 font-semibold">
-              ${totalRevenue} billable
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-900/20 text-emerald-400 border border-emerald-700/40 font-semibold">
+                ${totalRevenue} today
+              </span>
+              {carePlan.recurringRevenue?.totalMonthly > 0 && (
+                <span className="text-xs px-2.5 py-1 rounded-full bg-purple-900/20 text-purple-400 border border-purple-700/40 font-semibold hidden sm:inline">
+                  +${carePlan.recurringRevenue.totalMonthly}/mo recurring
+                </span>
+              )}
+            </div>
           )}
           {!signed ? (
             <button
@@ -740,6 +846,52 @@ Return this exact JSON:
                   </div>
                 </div>
               </div>
+
+              {/* RECURRING REVENUE — CCM / RPM / AWV / BHI */}
+              {carePlan.recurringRevenue?.qualifies && (
+                <div className="bg-gray-900 border border-purple-700/40 rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-purple-700/20 bg-purple-900/10 flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-purple-400 text-sm">Recurring Monthly Revenue</span>
+                      <span className="text-xs text-gray-500 ml-2">No additional visit required</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-purple-300 font-bold text-sm">${carePlan.recurringRevenue.totalMonthly}/mo</p>
+                      <p className="text-xs text-gray-500">${carePlan.recurringRevenue.totalAnnual.toLocaleString()}/yr</p>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-2">
+                    <div className="mb-3 p-3 bg-purple-900/10 border border-purple-700/20 rounded-lg">
+                      <p className="text-xs text-purple-300 font-medium">Strategy: Keep visits short (12-18 min), bill via MDM complexity — then layer monthly recurring codes on top. This patient qualifies for codes that generate revenue every month with no face-to-face required.</p>
+                    </div>
+                    {carePlan.recurringRevenue.codes.map((code, i) => (
+                      <div key={i} className={cn("p-3 rounded-xl border transition-all", code.eligible ? "border-purple-700/40 bg-purple-900/5" : "border-gray-700/40 opacity-50")}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className="font-mono text-sm font-bold text-purple-300">{code.code}</span>
+                              <span className="text-sm font-medium text-white">{code.name}</span>
+                              <span className="text-xs px-2 py-0.5 bg-gray-800 text-gray-400 rounded">{code.category}</span>
+                              {!code.eligible && <span className="text-xs text-red-400">Not eligible</span>}
+                            </div>
+                            <p className="text-xs text-gray-400">{code.requirement}</p>
+                            {code.eligible && <p className="text-xs text-teal-400 mt-1">→ {code.enrollmentAction}</p>}
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-base font-bold text-purple-400">${code.monthlyRevenue}/mo</p>
+                            <p className="text-xs text-gray-500">${code.annualRevenue}/yr</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {carePlan.recurringRevenue.enrollmentNote && (
+                      <div className="pt-2 border-t border-gray-800">
+                        <p className="text-xs text-gray-500">{carePlan.recurringRevenue.enrollmentNote}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* QUALITY MEASURES */}
               {carePlan.qualityMeasures.length > 0 && (
