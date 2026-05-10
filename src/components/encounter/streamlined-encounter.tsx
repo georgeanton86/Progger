@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import type { Patient, Appointment } from "@/lib/types";
 
@@ -40,6 +40,40 @@ type SOAPNote = {
   plan: string;
 };
 
+type UpsellItem = {
+  procedure: string;
+  cpt: string;
+  revenue: number;
+  scopePercent: number;
+  legalRisk: "low" | "medium" | "high";
+  description: string;
+};
+
+type RevenueIntelligence = {
+  baseVisit: number;
+  baseCode: string;
+  upsells: UpsellItem[];
+  totalPotential: number;
+};
+
+type PredictedExamFindings = {
+  expected: string[];
+  warnings: string[];
+};
+
+type LibabilityFlag = {
+  severity: "critical" | "warning";
+  flag: string;
+  action: string;
+};
+
+type ReturnVisitHook = {
+  trigger: string;
+  revenue: number;
+  timeframe: string;
+  qualityMeasure?: string;
+};
+
 type CarePlan = {
   assessment: CarePlanSection & { primary: string; secondaries: string[]; ruleOut: string[] };
   diagnostics: CarePlanSection;
@@ -49,6 +83,10 @@ type CarePlan = {
   ddx: DDXItem[];
   prescriptions: PrescriptionItem[];
   soap: SOAPNote;
+  revenueIntelligence: RevenueIntelligence;
+  predictedExamFindings: PredictedExamFindings;
+  liabilityFlags: LibabilityFlag[];
+  returnVisitHooks: ReturnVisitHook[];
 };
 
 function ConfidenceBadge({ value }: { value: number }) {
@@ -88,39 +126,18 @@ function ClinicalCard({
       )}
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {status === "accepted" && <span className="text-teal-400">✓</span>}
-          <h3
-            className={cn(
-              "font-semibold text-sm",
-              status === "accepted" ? "text-teal-300" : status === "rejected" ? "text-gray-500 line-through" : "text-white"
-            )}
-          >
+          <h3 className={cn("font-semibold text-sm", status === "accepted" ? "text-teal-300" : status === "rejected" ? "text-gray-500 line-through" : "text-white")}>
             {title}
           </h3>
           <ConfidenceBadge value={section.confidence} />
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={onReject}
-            className={cn(
-              "text-xs px-2.5 py-1 rounded border transition-colors",
-              status === "rejected"
-                ? "bg-red-900/40 text-red-400 border-red-700/40"
-                : "border-gray-700 text-gray-400 hover:border-red-500 hover:text-red-400"
-            )}
-          >
+        <div className="flex gap-2 flex-shrink-0">
+          <button onClick={onReject} className={cn("text-xs px-2.5 py-1 rounded border transition-colors", status === "rejected" ? "bg-red-900/40 text-red-400 border-red-700/40" : "border-gray-700 text-gray-400 hover:border-red-500 hover:text-red-400")}>
             Reject
           </button>
-          <button
-            onClick={onAccept}
-            className={cn(
-              "text-xs px-2.5 py-1 rounded border transition-colors",
-              status === "accepted"
-                ? "bg-teal-900/40 text-teal-400 border-teal-700/40"
-                : "border-gray-700 text-gray-400 hover:border-teal-500 hover:text-teal-400"
-            )}
-          >
+          <button onClick={onAccept} className={cn("text-xs px-2.5 py-1 rounded border transition-colors", status === "accepted" ? "bg-teal-900/40 text-teal-400 border-teal-700/40" : "border-gray-700 text-gray-400 hover:border-teal-500 hover:text-teal-400")}>
             Accept
           </button>
         </div>
@@ -136,7 +153,31 @@ function ClinicalCard({
         </ul>
       </div>
       <div className="px-4 py-2 border-t border-gray-800/60">
-        <p className="text-xs text-gray-500">📚 Source: {section.source}</p>
+        <p className="text-xs text-gray-500">Source: {section.source}</p>
+      </div>
+    </div>
+  );
+}
+
+function LoadingOrb() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full min-h-96 gap-6 px-6">
+      <div className="relative">
+        <div className="w-20 h-20 rounded-full border-4 border-teal-900/60 border-t-teal-400 animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-teal-600/20 animate-pulse" />
+        </div>
+      </div>
+      <div className="text-center max-w-sm">
+        <p className="text-white font-semibold text-lg mb-1">Building Predictive Care Plan</p>
+        <p className="text-gray-400 text-sm">AI is analyzing patient history, predicting diagnosis, generating SOAP note, calculating revenue intelligence, and checking liability flags...</p>
+      </div>
+      <div className="flex gap-2">
+        {["Analyzing Symptoms", "DDX Generation", "Rx Recommendations", "Revenue Intel"].map((step, i) => (
+          <div key={step} className="text-xs px-2.5 py-1 bg-gray-800 text-gray-400 rounded-full border border-gray-700 animate-pulse" style={{ animationDelay: `${i * 200}ms` }}>
+            {step}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -160,51 +201,121 @@ export function StreamlinedEncounter({
   const [editingSOAP, setEditingSOAP] = useState<Record<string, boolean>>({});
   const [soapEdits, setSoapEdits] = useState<Partial<SOAPNote>>({});
   const [signed, setSigned] = useState(false);
-
   const [vitals, setVitals] = useState({ bp: "", hr: "", temp: "", spo2: "" });
 
   const aptTime = new Date(appointment.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const hasScopeWarning = appointment.scopeStatus !== "within_scope";
 
-  async function generateCarePlan() {
+  const generateCarePlan = useCallback(async () => {
     setGenerating(true);
     setError(null);
     setCarePlan(null);
     setStatuses({});
     setSelectedDDX(null);
     try {
-      const prompt = `Generate a complete AI care plan for a patient visit as JSON. The patient details are:
-Name: ${patient.name}, Age: ${patient.age}, DOB: ${patient.dateOfBirth}
-Chief Complaint: ${patient.primaryComplaint}
-Medical History: ${patient.medicalHistory.join(", ")}
-Medications: ${patient.medications.join(", ")}
-Allergies: ${patient.allergies.join(", ")}
-Insurance: ${patient.insuranceProvider} ${patient.insurancePlan}
+      const prompt = `You are PrognoSX, an AI-powered predictive EHR engine for a Family Practice provider in California. Generate a complete predictive pre-visit care plan as valid JSON only (no other text).
 
-Return ONLY valid JSON with this exact structure:
+Patient Details:
+- Name: ${patient.name}, Age: ${patient.age}, DOB: ${patient.dateOfBirth}
+- Chief Complaint: ${patient.primaryComplaint}
+- Medical History: ${patient.medicalHistory.join(", ")}
+- Current Medications: ${patient.medications.join(", ")}
+- Allergies: ${patient.allergies.join(", ")}
+- Insurance: ${patient.insuranceProvider} ${patient.insurancePlan}
+- HPI: ${patient.hpiPreview}
+
+Return ONLY this JSON structure (no markdown, no explanation):
 {
-  "assessment": {"confidence": 92, "primary": "Acute Upper Respiratory Infection (J06.9)", "secondaries": ["Allergic Rhinitis (J30.9)"], "ruleOut": ["Influenza", "COVID-19"], "source": "UpToDate, AHA Guidelines"},
-  "diagnostics": {"confidence": 88, "items": ["Rapid Strep Test", "COVID-19 PCR if indicated"], "source": "CDC Guidelines"},
-  "treatmentPlan": {"confidence": 95, "items": ["Rest and hydration", "OTC decongestants PRN"], "source": "Cochrane Review"},
-  "patientEducation": {"confidence": 98, "items": ["Return precautions explained", "Hand hygiene counseling"], "source": "CDC"},
-  "followUp": {"confidence": 96, "items": ["Follow up in 1 week if no improvement", "Urgent return: worsening SOB, high fever"], "source": "AAFP"},
+  "assessment": {
+    "confidence": 91,
+    "primary": "Diagnosis Name (ICD10 code)",
+    "secondaries": ["Secondary finding 1", "Secondary finding 2"],
+    "ruleOut": ["Diagnosis to rule out 1", "Diagnosis to rule out 2"],
+    "source": "UpToDate, AAFP Guidelines"
+  },
+  "diagnostics": {
+    "confidence": 88,
+    "items": ["Test 1 - rationale", "Test 2 - rationale"],
+    "source": "CDC/AAFP Guidelines"
+  },
+  "treatmentPlan": {
+    "confidence": 93,
+    "items": ["Treatment 1", "Treatment 2", "Treatment 3"],
+    "source": "Cochrane Review, UpToDate"
+  },
+  "patientEducation": {
+    "confidence": 97,
+    "items": ["Education point 1", "Education point 2"],
+    "source": "CDC Patient Education"
+  },
+  "followUp": {
+    "confidence": 95,
+    "items": ["Follow-up instruction 1", "Return precaution 1"],
+    "source": "AAFP"
+  },
   "ddx": [
-    {"diagnosis": "Acute URI", "icd10": "J06.9", "confidence": 92, "legalRisk": "low", "recommended": true, "description": "Most likely diagnosis based on presentation"},
-    {"diagnosis": "Influenza", "icd10": "J11.1", "confidence": 60, "legalRisk": "low", "recommended": false, "description": "Consider if flu season, rapid test negative"},
-    {"diagnosis": "COVID-19", "icd10": "U07.1", "confidence": 45, "legalRisk": "medium", "recommended": false, "description": "Rule out with PCR testing"},
-    {"diagnosis": "Strep Pharyngitis", "icd10": "J02.0", "confidence": 35, "legalRisk": "low", "recommended": false, "description": "Rapid strep test indicated"},
-    {"diagnosis": "Allergic Rhinitis", "icd10": "J30.9", "confidence": 30, "legalRisk": "low", "recommended": false, "description": "Consider if seasonal pattern"}
+    {"diagnosis": "Primary Diagnosis", "icd10": "X00.0", "confidence": 91, "legalRisk": "low", "recommended": true, "description": "Most likely based on presentation"},
+    {"diagnosis": "Alternative 1", "icd10": "X00.1", "confidence": 55, "legalRisk": "low", "recommended": false, "description": "Consider if..."},
+    {"diagnosis": "Alternative 2", "icd10": "X00.2", "confidence": 40, "legalRisk": "medium", "recommended": false, "description": "Rule out with..."},
+    {"diagnosis": "Alternative 3", "icd10": "X00.3", "confidence": 25, "legalRisk": "low", "recommended": false, "description": "Less likely but..."},
+    {"diagnosis": "Alternative 4", "icd10": "X00.4", "confidence": 15, "legalRisk": "high", "recommended": false, "description": "Must rule out..."}
   ],
   "prescriptions": [
-    {"name": "Pseudoephedrine", "dosing": "60mg · q4-6h PRN · 7 days", "pharmacy": "CVS - Main St"},
-    {"name": "Guaifenesin", "dosing": "400mg · q4h PRN · 5 days", "pharmacy": "CVS - Main St"}
+    {"name": "Medication Name", "dosing": "dose · frequency · duration", "pharmacy": "CVS - Main St"},
+    {"name": "Second Med if needed", "dosing": "dose · frequency · PRN", "pharmacy": "CVS - Main St"}
   ],
   "soap": {
-    "subjective": "Patient presents with chief complaint of upper respiratory symptoms.",
-    "objective": "Vitals within normal limits. Oropharynx mildly erythematous. No exudate.",
-    "assessment": "Acute upper respiratory infection, likely viral etiology.",
-    "plan": "Supportive care, OTC medications, return precautions discussed."
-  }
+    "subjective": "Patient presents with [chief complaint]. [HPI summary]. PMH: [relevant history]. Medications: [relevant meds]. Allergies: [allergies].",
+    "objective": "Vitals: [predicted normal/abnormal values]. General: [appearance]. [Relevant system exam findings based on chief complaint - be specific and predictive e.g. 'Oropharynx: erythematous posterior pharynx with mild tonsillar edema, no exudate; TMs: bilateral erythematous tympanic membranes; Turbinates: swollen bilateral turbinates with pale mucosa'].",
+    "assessment": "[Primary diagnosis with ICD code]. [Secondary findings]. [Brief clinical reasoning].",
+    "plan": "[Specific plan items numbered 1-5+. Include medications with doses, labs ordered, referrals, patient education, follow-up timing]."
+  },
+  "revenueIntelligence": {
+    "baseVisit": 165,
+    "baseCode": "99213",
+    "upsells": [
+      {
+        "procedure": "Procedure Name",
+        "cpt": "00000",
+        "revenue": 120,
+        "scopePercent": 94,
+        "legalRisk": "low",
+        "description": "Why this is indicated for this patient"
+      }
+    ],
+    "totalPotential": 285
+  },
+  "predictedExamFindings": {
+    "expected": [
+      "Specific predicted physical exam finding 1 (e.g. Oropharynx: erythematous with mild edema)",
+      "Specific predicted finding 2 (e.g. TMs: erythematous, decreased mobility on pneumatic otoscopy)",
+      "Specific predicted finding 3 (e.g. Turbinates: swollen, pale mucosa bilateral)"
+    ],
+    "warnings": [
+      "Red flag to watch for 1",
+      "Red flag to watch for 2"
+    ]
+  },
+  "liabilityFlags": [
+    {
+      "severity": "critical",
+      "flag": "Specific liability issue (e.g. Patient on metformin - A1C not checked in 12+ months)",
+      "action": "Specific required action to mitigate risk"
+    },
+    {
+      "severity": "warning",
+      "flag": "Secondary liability concern",
+      "action": "Recommended protective action"
+    }
+  ],
+  "returnVisitHooks": [
+    {
+      "trigger": "Reason for return visit",
+      "revenue": 185,
+      "timeframe": "2 weeks",
+      "qualityMeasure": "HEDIS measure or quality metric if applicable"
+    }
+  ]
 }`;
 
       const res = await fetch("/api/ai", {
@@ -217,87 +328,95 @@ Return ONLY valid JSON with this exact structure:
       const data = await res.json();
       const text: string = data.reply || "";
       const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("No JSON found in response");
+      if (!jsonMatch) throw new Error("No JSON in response");
       const parsed = JSON.parse(jsonMatch[0]) as CarePlan;
       setCarePlan(parsed);
-      // Pre-fill SOAP edits
       setSoapEdits(parsed.soap);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setGenerating(false);
     }
-  }
+  }, [patient, appointment]);
+
+  // Auto-generate on mount
+  useEffect(() => {
+    generateCarePlan();
+  }, [generateCarePlan]);
 
   function setStatus(key: string, status: SectionStatus) {
     setStatuses(prev => ({ ...prev, [key]: prev[key] === status ? "idle" : status }));
   }
 
   const lowestRiskDDX = carePlan?.ddx.reduce((best, cur) => {
-    const riskOrder = { low: 0, medium: 1, high: 2 };
-    return riskOrder[cur.legalRisk] < riskOrder[best.legalRisk] ? cur : best;
+    const order = { low: 0, medium: 1, high: 2 };
+    return order[cur.legalRisk] < order[best.legalRisk] ? cur : best;
   }, carePlan.ddx[0]);
+
+  const totalRevenuePotential = carePlan?.revenueIntelligence
+    ? carePlan.revenueIntelligence.baseVisit + carePlan.revenueIntelligence.upsells.reduce((s, u) => s + u.revenue, 0)
+    : 0;
+
+  const criticalFlags = carePlan?.liabilityFlags.filter(f => f.severity === "critical") ?? [];
 
   return (
     <div className="flex flex-col h-full bg-gray-950">
       {/* Top bar */}
-      <div className="bg-gray-900 border-b border-gray-800 px-5 py-3 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="text-gray-500 hover:text-white transition-colors text-sm flex items-center gap-1">
+      <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between flex-shrink-0 flex-wrap gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={onBack} className="text-gray-500 hover:text-white transition-colors text-sm flex items-center gap-1 flex-shrink-0">
             ← Back
           </button>
-          <div className="h-4 w-px bg-gray-700" />
-          <div>
+          <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
+          <div className="min-w-0">
             <span className="text-white font-semibold">{patient.name}</span>
-            <span className="text-gray-400 text-sm ml-2">· Age {patient.age} · DOB {patient.dateOfBirth} · {aptTime}</span>
+            <span className="text-gray-400 text-sm ml-2 hidden sm:inline">· Age {patient.age} · {aptTime}</span>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className={cn("text-xs px-2.5 py-1 rounded-full border", hasScopeWarning ? "text-amber-400 bg-amber-900/20 border-amber-700/40" : "text-teal-400 bg-teal-900/20 border-teal-700/40")}>
+        <div className="flex items-center gap-2 flex-wrap">
+          {criticalFlags.length > 0 && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-700/40 font-bold animate-pulse">
+              ⚠ {criticalFlags.length} Liability Flag{criticalFlags.length > 1 ? "s" : ""}
+            </span>
+          )}
+          <span className={cn("text-xs px-2.5 py-1 rounded-full border hidden sm:inline", hasScopeWarning ? "text-amber-400 bg-amber-900/20 border-amber-700/40" : "text-teal-400 bg-teal-900/20 border-teal-700/40")}>
             {hasScopeWarning ? "⚠ Scope Review" : "✓ Within Scope"}
           </span>
-          <span className="text-xs px-2.5 py-1 rounded-full bg-gray-800 border border-gray-700 text-gray-300">
-            {patient.insuranceProvider}
-          </span>
+          {carePlan && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-900/20 text-emerald-400 border border-emerald-700/40 font-semibold">
+              ${totalRevenuePotential} potential
+            </span>
+          )}
           <button
             onClick={() => setSigned(true)}
-            disabled={signed}
-            className={cn("px-4 py-1.5 rounded-lg text-sm font-medium transition-colors", signed ? "bg-green-700 text-green-100" : "bg-green-600 hover:bg-green-700 text-white")}
+            disabled={signed || generating}
+            className={cn("px-4 py-1.5 rounded-lg text-sm font-bold transition-colors", signed ? "bg-green-700 text-green-100" : "bg-green-600 hover:bg-green-700 text-white disabled:opacity-50")}
           >
-            {signed ? "✓ Signed" : "Sign Chart"}
+            {signed ? "✓ Signed & Sent" : "Sign & Send"}
           </button>
         </div>
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         {/* Left panel */}
-        <div className="w-72 border-r border-gray-800 overflow-y-auto bg-gray-900/50 flex-shrink-0 p-4 space-y-4">
+        <div className="w-full md:w-72 md:border-r border-b md:border-b-0 border-gray-800 overflow-y-auto bg-gray-900/50 flex-shrink-0 p-4 space-y-4 max-h-64 md:max-h-none">
           {/* Patient Header */}
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold">
+            <div className="w-12 h-12 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold flex-shrink-0">
               {getInitials(patient.name)}
             </div>
             <div>
               <p className="font-semibold text-white">{patient.name}</p>
               <p className="text-xs text-gray-400">DOB: {patient.dateOfBirth}</p>
-              <p className="text-xs text-gray-400">Age {patient.age}</p>
+              <p className="text-xs text-gray-400">Age {patient.age} · {patient.insuranceProvider}</p>
             </div>
           </div>
 
-          {/* Digital Voicemail */}
+          {/* Digital Voicemail / Intake */}
           <div className="bg-gray-800 rounded-xl p-3">
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-xs font-semibold text-teal-400">📱 Digital Voicemail</span>
-              <span className="text-xs text-gray-500 ml-auto">{aptTime}</span>
-            </div>
-            <p className="text-xs text-gray-300">&quot;I&apos;ve been having {patient.primaryComplaint?.toLowerCase()} and wanted to get checked out. My {patient.medications[0] ? `${patient.medications[0]} doesn&apos;t seem to be helping` : "symptoms are persistent"}.&quot;</p>
-          </div>
-
-          {/* Check-In */}
-          <div className="bg-gray-800 rounded-xl p-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-xs font-semibold text-blue-400">🏥 Waiting Room Check-In</span>
+              <span className="text-xs font-semibold text-teal-400">Intake / Voicemail</span>
               <span className="text-xs text-gray-500 ml-auto">{aptTime}</span>
             </div>
             <p className="text-xs text-gray-300">{patient.hpiPreview}</p>
@@ -319,7 +438,7 @@ Return ONLY valid JSON with this exact structure:
                 { key: "temp", label: "Temp", placeholder: "98.6°F", color: "text-yellow-400" },
                 { key: "spo2", label: "SpO₂", placeholder: "98%", color: "text-teal-400" },
               ].map(v => (
-                <div key={v.key} className={cn("bg-gray-800 rounded-lg px-2 py-1.5 border border-gray-700")}>
+                <div key={v.key} className="bg-gray-800 rounded-lg px-2 py-1.5 border border-gray-700">
                   <p className={cn("text-xs font-semibold", v.color)}>{v.label}</p>
                   <input
                     type="text"
@@ -352,7 +471,7 @@ Return ONLY valid JSON with this exact structure:
             <ul className="space-y-1">
               {patient.medications.map(m => (
                 <li key={m} className="text-xs text-gray-300 flex items-start gap-1.5">
-                  <span className="text-teal-400 mt-0.5">•</span> {m}
+                  <span className="text-teal-400 mt-0.5 flex-shrink-0">•</span> {m}
                 </li>
               ))}
             </ul>
@@ -364,43 +483,152 @@ Return ONLY valid JSON with this exact structure:
             <ul className="space-y-1">
               {patient.medicalHistory.map(h => (
                 <li key={h} className="text-xs text-gray-300 flex items-start gap-1.5">
-                  <span className="text-purple-400 mt-0.5">•</span> {h}
+                  <span className="text-purple-400 mt-0.5 flex-shrink-0">•</span> {h}
                 </li>
               ))}
             </ul>
           </div>
         </div>
 
-        {/* Right panel: AI Care Plan Studio */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          <div className="flex items-center justify-between">
+        {/* Right panel */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-5">
+          {/* Header bar */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h2 className="text-xl font-bold text-white">AI Care Plan Studio</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Evidence-based clinical decision support for {patient.name}</p>
+              <h2 className="text-lg md:text-xl font-bold text-white">PrognoSX AI Care Plan</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {generating ? "Building predictive care plan..." : carePlan ? "Pre-visit plan ready — review and sign" : "AI-powered predictive charting"}
+              </p>
             </div>
-            <button
-              onClick={generateCarePlan}
-              disabled={generating}
-              className="flex items-center gap-2 px-5 py-2.5 bg-teal-500 hover:bg-teal-600 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
-            >
-              {generating && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-              {generating ? "Generating..." : "Generate AI Care Plan"}
-            </button>
+            {!generating && (
+              <button
+                onClick={generateCarePlan}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium rounded-lg border border-gray-700 transition-colors"
+              >
+                Regenerate
+              </button>
+            )}
           </div>
 
-          {error && (
-            <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4 text-red-400 text-sm">{error}</div>
-          )}
+          {/* Loading state */}
+          {generating && <LoadingOrb />}
 
-          {!carePlan && !generating && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-              <p className="text-gray-500 text-sm">Click &quot;Generate AI Care Plan&quot; to create a comprehensive, evidence-based care plan for this patient.</p>
+          {/* Error state */}
+          {error && !generating && (
+            <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4">
+              <p className="text-red-400 text-sm font-medium mb-1">Generation failed</p>
+              <p className="text-red-300 text-xs">{error}</p>
+              <button onClick={generateCarePlan} className="mt-3 text-xs px-3 py-1.5 bg-red-900/30 text-red-400 border border-red-700/40 rounded-lg hover:bg-red-900/50 transition-colors">
+                Retry
+              </button>
             </div>
           )}
 
           {carePlan && (
             <>
-              {/* Assessment */}
+              {/* LIABILITY FLAGS — always first */}
+              {carePlan.liabilityFlags.length > 0 && (
+                <div className="bg-gray-900 border border-red-700/40 rounded-xl overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-3 border-b border-red-700/20 bg-red-900/10">
+                    <span className="text-red-400 text-sm">⚠</span>
+                    <h3 className="font-bold text-red-400 text-sm">Liability Flags</h3>
+                    <span className="text-xs text-gray-500 ml-auto">Address before signing</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {carePlan.liabilityFlags.map((flag, i) => (
+                      <div key={i} className={cn("p-3 rounded-lg border", flag.severity === "critical" ? "bg-red-900/20 border-red-700/40" : "bg-amber-900/10 border-amber-700/30")}>
+                        <div className="flex items-start gap-2">
+                          <span className={cn("text-xs font-bold px-2 py-0.5 rounded flex-shrink-0", flag.severity === "critical" ? "bg-red-900/40 text-red-400" : "bg-amber-900/40 text-amber-400")}>
+                            {flag.severity.toUpperCase()}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white font-medium">{flag.flag}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">Action: {flag.action}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* REVENUE INTELLIGENCE */}
+              <div className="bg-gray-900 border border-emerald-700/30 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-emerald-700/20 bg-emerald-900/10">
+                  <h3 className="font-bold text-emerald-400 text-sm">Revenue Intelligence</h3>
+                  <span className="text-emerald-300 font-bold text-sm">${totalRevenuePotential} total potential</span>
+                </div>
+                <div className="p-4">
+                  {/* Base visit */}
+                  <div className="flex items-center justify-between mb-3 p-3 bg-gray-800 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-white">Base Visit</p>
+                      <p className="text-xs text-gray-400">CPT {carePlan.revenueIntelligence.baseCode} · {patient.insuranceProvider}</p>
+                    </div>
+                    <p className="text-lg font-bold text-white">${carePlan.revenueIntelligence.baseVisit}</p>
+                  </div>
+
+                  {/* Upsells */}
+                  {carePlan.revenueIntelligence.upsells.length > 0 && (
+                    <>
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Additional Opportunities</p>
+                      <div className="space-y-2">
+                        {carePlan.revenueIntelligence.upsells.map((upsell, i) => (
+                          <div key={i} className="flex items-start justify-between gap-3 p-3 bg-gray-800/60 rounded-lg border border-gray-700/50">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-medium text-white">{upsell.procedure}</p>
+                                <span className="text-xs font-mono text-gray-400 bg-gray-700 px-1.5 py-0.5 rounded">CPT {upsell.cpt}</span>
+                                <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", upsell.legalRisk === "low" ? "bg-green-900/40 text-green-400" : upsell.legalRisk === "medium" ? "bg-amber-900/40 text-amber-400" : "bg-red-900/40 text-red-400")}>
+                                  {upsell.scopePercent}% scope · {upsell.legalRisk} risk
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-400 mt-0.5">{upsell.description}</p>
+                            </div>
+                            <p className="text-base font-bold text-emerald-400 flex-shrink-0">+${upsell.revenue}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* PREDICTED EXAM FINDINGS */}
+              <div className="bg-gray-900 border border-purple-700/30 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-purple-700/20 bg-purple-900/10">
+                  <h3 className="font-bold text-purple-400 text-sm">Predicted Physical Exam Findings</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Expect to find on examination based on chief complaint and history</p>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Expected Findings</p>
+                    <ul className="space-y-1.5">
+                      {carePlan.predictedExamFindings.expected.map((finding, i) => (
+                        <li key={i} className="text-sm text-gray-300 flex items-start gap-2">
+                          <span className="text-purple-400 mt-0.5 flex-shrink-0">→</span>
+                          {finding}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  {carePlan.predictedExamFindings.warnings.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Watch For (Red Flags)</p>
+                      <ul className="space-y-1.5">
+                        {carePlan.predictedExamFindings.warnings.map((warn, i) => (
+                          <li key={i} className="text-sm text-amber-300 flex items-start gap-2">
+                            <span className="text-amber-400 mt-0.5 flex-shrink-0">⚠</span>
+                            {warn}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ASSESSMENT */}
               <ClinicalCard
                 title="Assessment"
                 section={carePlan.assessment}
@@ -409,7 +637,7 @@ Return ONLY valid JSON with this exact structure:
                 onReject={() => setStatus("assessment", "rejected")}
               />
 
-              {/* Diagnostics */}
+              {/* DIAGNOSTICS */}
               <ClinicalCard
                 title="Diagnostics"
                 section={carePlan.diagnostics}
@@ -418,7 +646,7 @@ Return ONLY valid JSON with this exact structure:
                 onReject={() => setStatus("diagnostics", "rejected")}
               />
 
-              {/* Treatment Plan */}
+              {/* TREATMENT PLAN */}
               <ClinicalCard
                 title="Treatment Plan"
                 section={carePlan.treatmentPlan}
@@ -427,7 +655,7 @@ Return ONLY valid JSON with this exact structure:
                 onReject={() => setStatus("treatmentPlan", "rejected")}
               />
 
-              {/* Patient Education */}
+              {/* PATIENT EDUCATION */}
               <ClinicalCard
                 title="Patient Education"
                 section={carePlan.patientEducation}
@@ -436,7 +664,7 @@ Return ONLY valid JSON with this exact structure:
                 onReject={() => setStatus("patientEducation", "rejected")}
               />
 
-              {/* Follow-Up */}
+              {/* FOLLOW-UP */}
               <ClinicalCard
                 title="Follow-up & Red Flags"
                 section={carePlan.followUp}
@@ -448,12 +676,10 @@ Return ONLY valid JSON with this exact structure:
               {/* DDX */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-                  <h3 className="font-semibold text-white text-sm">Differential Diagnosis Options (DDX)</h3>
-                  <button className="text-xs text-teal-400 hover:text-teal-300 border border-teal-700/40 px-2.5 py-1 rounded transition-colors">
-                    Select if rejecting primary
-                  </button>
+                  <h3 className="font-semibold text-white text-sm">Differential Diagnosis (DDX)</h3>
+                  <span className="text-xs text-gray-500">Select if changing primary</span>
                 </div>
-                <div className="p-4 space-y-3">
+                <div className="p-4 space-y-2">
                   {carePlan.ddx.map((item, i) => (
                     <button
                       key={i}
@@ -465,7 +691,7 @@ Return ONLY valid JSON with this exact structure:
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0", selectedDDX === i || item.recommended ? "border-teal-400" : "border-gray-600")}>
+                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0", selectedDDX === i || (selectedDDX === null && item.recommended) ? "border-teal-400" : "border-gray-600")}>
                           {(selectedDDX === i || (selectedDDX === null && item.recommended)) && (
                             <div className="w-2 h-2 rounded-full bg-teal-400" />
                           )}
@@ -479,7 +705,7 @@ Return ONLY valid JSON with this exact structure:
                               {item.legalRisk} risk
                             </span>
                             {item.recommended && (
-                              <span className="text-xs px-2 py-0.5 bg-teal-900/40 text-teal-400 rounded-full">Recommended</span>
+                              <span className="text-xs px-2 py-0.5 bg-teal-900/40 text-teal-400 rounded-full">AI Pick</span>
                             )}
                           </div>
                           <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
@@ -487,48 +713,75 @@ Return ONLY valid JSON with this exact structure:
                       </div>
                     </button>
                   ))}
-
-                  {/* Lowest Legal Risk */}
                   {lowestRiskDDX && (
-                    <div className="mt-2 px-3 py-2 bg-green-900/20 border border-green-700/40 rounded-lg">
-                      <p className="text-xs text-green-400 font-medium">Lowest Legal Risk Option: {lowestRiskDDX.diagnosis}</p>
+                    <div className="mt-1 px-3 py-2 bg-green-900/20 border border-green-700/40 rounded-lg">
+                      <p className="text-xs text-green-400 font-medium">Lowest Legal Risk: {lowestRiskDDX.diagnosis} ({lowestRiskDDX.icd10})</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Prescriptions */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-                  <h3 className="font-semibold text-white text-sm">Prescription Orders</h3>
-                  {carePlan.prescriptions[0] && (
-                    <span className="text-xs text-teal-400 font-medium">{carePlan.prescriptions[0].pharmacy}</span>
-                  )}
-                </div>
-                <div className="p-4 space-y-3">
-                  {carePlan.prescriptions.map((rx, i) => (
-                    <div key={i} className="flex items-center justify-between bg-gray-800 rounded-xl p-3">
-                      <div>
-                        <p className="font-medium text-white text-sm">{rx.name}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{rx.dosing}</p>
+              {/* PRESCRIPTIONS */}
+              {carePlan.prescriptions.length > 0 && (
+                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+                    <h3 className="font-semibold text-white text-sm">Prescription Orders</h3>
+                    <span className="text-xs text-teal-400">Ready to send to pharmacy</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {carePlan.prescriptions.map((rx, i) => (
+                      <div key={i} className="flex items-center justify-between bg-gray-800 rounded-xl p-3">
+                        <div>
+                          <p className="font-semibold text-white text-sm">{rx.name}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{rx.dosing}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{rx.pharmacy}</p>
+                        </div>
+                        <button
+                          onClick={() => setStatus(`rx-${i}`, statuses[`rx-${i}`] === "accepted" ? "idle" : "accepted")}
+                          className={cn("text-xs px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0", statuses[`rx-${i}`] === "accepted" ? "bg-teal-900/40 text-teal-400 border-teal-700/40" : "border-gray-700 text-gray-400 hover:border-teal-500 hover:text-teal-400")}
+                        >
+                          {statuses[`rx-${i}`] === "accepted" ? "✓ Send" : "Approve & Send"}
+                        </button>
                       </div>
-                      <button
-                        onClick={() => setStatus(`rx-${i}`, statuses[`rx-${i}`] === "accepted" ? "idle" : "accepted")}
-                        className={cn("text-xs px-3 py-1.5 rounded-lg border transition-colors", statuses[`rx-${i}`] === "accepted" ? "bg-teal-900/40 text-teal-400 border-teal-700/40" : "border-gray-700 text-gray-400 hover:border-teal-500 hover:text-teal-400")}
-                      >
-                        {statuses[`rx-${i}`] === "accepted" ? "✓ Accepted" : "Accept"}
-                      </button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Integrated Clinical Note - Drop Chart */}
+              {/* RETURN VISIT HOOKS */}
+              {carePlan.returnVisitHooks.length > 0 && (
+                <div className="bg-gray-900 border border-amber-700/30 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-amber-700/20 bg-amber-900/5">
+                    <h3 className="font-bold text-amber-400 text-sm">Return Visit & Revenue Hooks</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">Missed follow-up = missed revenue + potential liability</p>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {carePlan.returnVisitHooks.map((hook, i) => (
+                      <div key={i} className="flex items-start justify-between gap-3 p-3 bg-gray-800/60 rounded-lg border border-gray-700/50">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white">{hook.trigger}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">Timeframe: {hook.timeframe}</p>
+                          {hook.qualityMeasure && (
+                            <p className="text-xs text-purple-400 mt-0.5">Quality: {hook.qualityMeasure}</p>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-bold text-amber-400">+${hook.revenue}</p>
+                          <button className="text-xs text-gray-500 hover:text-white mt-1 transition-colors">Schedule →</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SOAP DROP CHART */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-800">
-                  <h3 className="font-semibold text-white text-sm">Integrated Clinical Note — Drop Chart</h3>
+                  <h3 className="font-semibold text-white text-sm">Drop Chart — SOAP Note</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Pre-populated · Click Edit to modify any field</p>
                 </div>
-                <div className="p-4 space-y-4">
+                <div className="p-4 space-y-3">
                   {(["subjective", "objective", "assessment", "plan"] as const).map(field => {
                     const isEditing = !!editingSOAP[field];
                     const text = soapEdits[field] ?? carePlan.soap[field];
@@ -540,14 +793,14 @@ Return ONLY valid JSON with this exact structure:
                             onClick={() => setEditingSOAP(prev => ({ ...prev, [field]: !prev[field] }))}
                             className="text-xs text-gray-500 hover:text-white transition-colors"
                           >
-                            ✏ {isEditing ? "Done" : "Edit"}
+                            {isEditing ? "Done" : "Edit"}
                           </button>
                         </div>
                         {isEditing ? (
                           <textarea
                             value={text}
                             onChange={e => setSoapEdits(prev => ({ ...prev, [field]: e.target.value }))}
-                            rows={3}
+                            rows={4}
                             className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                           />
                         ) : (
@@ -559,10 +812,10 @@ Return ONLY valid JSON with this exact structure:
                 </div>
               </div>
 
-              {/* Chart Options */}
+              {/* CHART OPTIONS + SIGN */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <p className="text-sm font-semibold text-white mb-3">Chart Options</p>
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-4 mb-4">
                   {[
                     { value: "ehr", label: "Link to Company EHR (Epic, Cerner, etc.)" },
                     { value: "standalone", label: "Use as Standalone EHR Record" },
@@ -578,6 +831,13 @@ Return ONLY valid JSON with this exact structure:
                     </label>
                   ))}
                 </div>
+                <button
+                  onClick={() => setSigned(true)}
+                  disabled={signed}
+                  className={cn("w-full py-3 rounded-xl text-sm font-bold transition-colors", signed ? "bg-green-700 text-green-100" : "bg-green-600 hover:bg-green-700 text-white")}
+                >
+                  {signed ? "✓ Chart Signed & Prescriptions Sent" : "Sign Chart & Send Prescriptions"}
+                </button>
               </div>
             </>
           )}
