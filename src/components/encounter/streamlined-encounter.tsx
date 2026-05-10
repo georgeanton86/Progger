@@ -173,8 +173,8 @@ function SectionCard({
   source,
   confidence,
   status,
-  onToggle,
-  onEdit,
+  onAccept,
+  onReject,
   children,
 }: {
   title: string;
@@ -182,43 +182,45 @@ function SectionCard({
   source?: string;
   confidence?: number;
   status: SectionStatus;
-  onToggle: () => void;
-  onEdit?: () => void;
+  onAccept: () => void;
+  onReject: () => void;
   children?: React.ReactNode;
 }) {
+  const isRejected = status === "rejected";
   return (
-    <div className={cn(
-      "bg-gray-900 border rounded-xl overflow-hidden transition-all",
-      status === "rejected" ? "border-red-700/40 opacity-60" : status === "edited" ? "border-amber-600/50" : "border-teal-600/40"
-    )}>
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800/80">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <span className={cn("text-xs font-bold", status === "rejected" ? "text-red-400" : status === "edited" ? "text-amber-400" : "text-teal-400")}>
-            {status === "rejected" ? "✕ REJECTED" : status === "edited" ? "✎ EDITED" : "✓ CONFIRMED"}
-          </span>
+    <div className={cn("rounded-2xl border overflow-hidden transition-all", isRejected ? "border-red-700/40 opacity-55" : "border-gray-700/40")}>
+      <div className="flex items-center justify-between px-4 py-3 bg-gray-800/70">
+        <div className="flex items-center gap-2 min-w-0">
           <span className="font-semibold text-white text-sm">{title}</span>
-          {confidence !== undefined && <ConfBadge value={confidence} />}
-        </div>
-        <div className="flex gap-1.5 flex-shrink-0">
-          {onEdit && status !== "rejected" && (
-            <button onClick={onEdit} className="text-xs px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-amber-400 hover:border-amber-700 transition-colors">
-              Edit
-            </button>
+          {confidence !== undefined && (
+            <span className="text-xs text-gray-400 hidden sm:inline">{confidence}% confidence</span>
           )}
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
           <button
-            onClick={onToggle}
-            className={cn("text-xs px-2.5 py-1 rounded border transition-colors", status === "rejected" ? "bg-gray-800 text-gray-400 border-gray-700 hover:text-white" : "border-red-800 text-red-500 hover:bg-red-900/20")}
+            onClick={onReject}
+            className={cn("flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all",
+              isRejected ? "bg-red-600 border-red-500 text-white" : "bg-red-900/20 border-red-700/40 text-red-400 hover:bg-red-900/40"
+            )}
           >
-            {status === "rejected" ? "Restore" : "Reject"}
+            ✕ Reject
+          </button>
+          <button
+            onClick={onAccept}
+            className={cn("flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all",
+              !isRejected ? "bg-green-600 border-green-500 text-white" : "bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700"
+            )}
+          >
+            ✓ Accept
           </button>
         </div>
       </div>
-      <div className="px-4 py-3">
+      <div className="px-4 py-3 bg-gray-900/50">
         {items && (
           <ul className="space-y-1.5">
             {items.map((item, i) => (
               <li key={i} className="text-sm text-gray-300 flex items-start gap-2">
-                <span className="text-teal-500 mt-0.5 flex-shrink-0">•</span> {item}
+                <span className="text-purple-400 mt-1 flex-shrink-0 text-xs">●</span>{item}
               </li>
             ))}
           </ul>
@@ -226,8 +228,8 @@ function SectionCard({
         {children}
       </div>
       {source && (
-        <div className="px-4 py-1.5 border-t border-gray-800/40">
-          <p className="text-xs text-gray-600">Evidence: {source}</p>
+        <div className="px-4 py-2 border-t border-gray-800/60 bg-gray-900/30">
+          <p className="text-xs text-gray-500">☰ Source: {source}</p>
         </div>
       )}
     </div>
@@ -622,6 +624,8 @@ RECURRING REVENUE INSTRUCTIONS:
   function toggle(key: string) {
     setStatuses(prev => ({ ...prev, [key]: prev[key] === "rejected" ? "accepted" : "rejected" }));
   }
+  function accept(key: string) { setStatuses(prev => ({ ...prev, [key]: "accepted" })); }
+  function reject(key: string) { setStatuses(prev => ({ ...prev, [key]: "rejected" })); }
 
   function confirmAll() {
     if (!carePlan) return;
@@ -723,14 +727,19 @@ RECURRING REVENUE INSTRUCTIONS:
           {/* Patient avatar in top bar */}
           <PatientAvatar patient={patient} size={32} />
           <div className="min-w-0">
-            <span className="text-white font-bold">{patient.name}</span>
-            <span className="text-gray-400 text-xs ml-2 hidden sm:inline">· Age {patient.age} · {aptTime}</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-white font-bold text-sm">{patient.name}</span>
+              <span className="text-gray-400 text-xs hidden sm:inline">{patient.age}yo · {aptTime}</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-700/40 font-semibold">● Within Scope</span>
+              {patient.insuranceProvider && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-900/30 text-blue-400 border border-blue-700/30 hidden sm:inline">
+                  {patient.insuranceProvider} {patient.insurancePlan}
+                </span>
+              )}
+            </div>
           </div>
-          {carePlan && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-teal-900/30 text-teal-400 border border-teal-700/40 font-semibold hidden sm:inline">
-              {carePlan.predictiveAccuracy}% predictive
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           {/* Voice listening indicator */}
@@ -891,7 +900,7 @@ RECURRING REVENUE INSTRUCTIONS:
         <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h2 className="text-lg font-bold text-white">PrognoSX Predictive Chart</h2>
+              <h2 className="text-lg font-bold text-white">✦ AI Care Plan Studio</h2>
               <p className="text-xs text-gray-500">
                 {generating ? "Building evidence-based care plan..." : carePlan ? `${Object.values(statuses).filter(s => s === "accepted").length} sections confirmed · ${Object.values(statuses).filter(s => s === "rejected").length} rejected` : ""}
               </p>
@@ -1229,69 +1238,108 @@ RECURRING REVENUE INSTRUCTIONS:
               </div>
 
               {/* ASSESSMENT */}
-              <SectionCard title="Assessment" confidence={carePlan.assessment.confidence} source={carePlan.assessment.source} status={statuses["assessment"] ?? "accepted"} onToggle={() => toggle("assessment")}
+              <SectionCard title="Assessment" confidence={carePlan.assessment.confidence} source={carePlan.assessment.source} status={statuses["assessment"] ?? "accepted"} onAccept={() => accept("assessment")} onReject={() => reject("assessment")}
                 items={[carePlan.assessment.primary, ...carePlan.assessment.secondaries, ...carePlan.assessment.ruleOut.map(r => `Rule out: ${r}`)].filter(Boolean)}
               />
 
               {/* DIAGNOSTICS */}
-              <SectionCard title="Diagnostics & Labs" confidence={carePlan.diagnostics.confidence} source={carePlan.diagnostics.source} status={statuses["diagnostics"] ?? "accepted"} onToggle={() => toggle("diagnostics")} items={carePlan.diagnostics.items} />
+              <SectionCard title="Diagnostics & Labs" confidence={carePlan.diagnostics.confidence} source={carePlan.diagnostics.source} status={statuses["diagnostics"] ?? "accepted"} onAccept={() => accept("diagnostics")} onReject={() => reject("diagnostics")} items={carePlan.diagnostics.items} />
 
               {/* TREATMENT PLAN */}
-              <SectionCard title="Treatment Plan" confidence={carePlan.treatmentPlan.confidence} source={carePlan.treatmentPlan.source} status={statuses["treatmentPlan"] ?? "accepted"} onToggle={() => toggle("treatmentPlan")} items={carePlan.treatmentPlan.items} />
+              <SectionCard title="Treatment Plan" confidence={carePlan.treatmentPlan.confidence} source={carePlan.treatmentPlan.source} status={statuses["treatmentPlan"] ?? "accepted"} onAccept={() => accept("treatmentPlan")} onReject={() => reject("treatmentPlan")} items={carePlan.treatmentPlan.items} />
 
               {/* PATIENT EDUCATION */}
-              <SectionCard title="Patient Education" confidence={carePlan.patientEducation.confidence} source={carePlan.patientEducation.source} status={statuses["patientEducation"] ?? "accepted"} onToggle={() => toggle("patientEducation")} items={carePlan.patientEducation.items} />
+              <SectionCard title="Patient Education" confidence={carePlan.patientEducation.confidence} source={carePlan.patientEducation.source} status={statuses["patientEducation"] ?? "accepted"} onAccept={() => accept("patientEducation")} onReject={() => reject("patientEducation")} items={carePlan.patientEducation.items} />
 
               {/* FOLLOW-UP */}
-              <SectionCard title="Follow-up & Return Precautions" confidence={carePlan.followUp.confidence} source={carePlan.followUp.source} status={statuses["followUp"] ?? "accepted"} onToggle={() => toggle("followUp")} items={carePlan.followUp.items} />
+              <SectionCard title="Follow-up & Red Flags" confidence={carePlan.followUp.confidence} source={carePlan.followUp.source} status={statuses["followUp"] ?? "accepted"} onAccept={() => accept("followUp")} onReject={() => reject("followUp")} items={carePlan.followUp.items} />
 
-              {/* DDX */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-                  <span className="font-bold text-white text-sm">Differential Diagnosis</span>
-                  <span className="text-xs text-gray-500">Tap to change primary</span>
+              {/* DDX — Replit-style radio cards */}
+              <div className="rounded-2xl border border-amber-700/50 overflow-hidden">
+                <div className="px-4 py-3 bg-amber-900/20 border-b border-amber-700/30 flex items-center justify-between">
+                  <span className="font-bold text-amber-300 text-sm">Differential Diagnosis Options (DDX)</span>
+                  <span className="text-xs text-amber-600">Select if rejecting primary</span>
                 </div>
-                <div className="p-4 space-y-2">
+                <div className="px-3 py-1 bg-gray-900/40 border-b border-gray-800/60">
+                  <p className="text-xs text-gray-500 py-1.5">Primary diagnosis shown first. Tap to select alternative. Legal risk reflects standard of care liability.</p>
+                </div>
+                <div className="p-3 space-y-2 bg-gray-900/30">
                   {carePlan.ddx.map((d, i) => (
-                    <button key={i} onClick={() => setSelectedDDX(i)} className={cn("w-full text-left p-3 rounded-xl border transition-all", selectedDDX === i ? "border-teal-500 bg-teal-900/15" : "border-gray-700 bg-gray-800/40 hover:border-gray-600")}>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className={cn("w-3.5 h-3.5 rounded-full border-2 flex-shrink-0", selectedDDX === i ? "border-teal-400 bg-teal-400" : "border-gray-600")} />
-                        <span className="font-medium text-white text-sm">{d.diagnosis}</span>
-                        <span className="text-xs font-mono text-gray-400 bg-gray-700 px-1.5 py-0.5 rounded">{d.icd10}</span>
-                        <span className="text-xs text-gray-400">{d.confidence}%</span>
-                        <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", d.legalRisk === "low" ? "bg-green-900/40 text-green-400" : d.legalRisk === "medium" ? "bg-amber-900/40 text-amber-400" : "bg-red-900/40 text-red-400")}>
-                          {d.legalRisk} risk
-                        </span>
-                        {d.recommended && selectedDDX === i && <span className="text-xs px-2 py-0.5 bg-teal-900/40 text-teal-400 rounded-full">AI Pick</span>}
+                    <button
+                      key={i}
+                      onClick={() => setSelectedDDX(i)}
+                      className={cn("w-full text-left p-3 rounded-xl border transition-all",
+                        selectedDDX === i
+                          ? "border-amber-500/60 bg-amber-900/15"
+                          : "border-gray-700/50 bg-gray-800/30 hover:border-gray-600"
+                      )}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className={cn("w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5",
+                          selectedDDX === i ? "border-amber-400 bg-amber-400" : "border-gray-600"
+                        )} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 flex-wrap">
+                            <p className="font-bold text-white text-sm leading-snug">{d.diagnosis}</p>
+                            <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                              {d.recommended && <span className="text-xs px-2 py-0.5 bg-amber-900/50 text-amber-300 rounded-full font-medium">Recommended</span>}
+                              <span className="text-xs font-mono text-gray-400 bg-gray-700/60 px-1.5 py-0.5 rounded">{d.icd10}</span>
+                              <span className="text-xs text-gray-300 font-semibold">{d.confidence}%</span>
+                              <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium",
+                                d.legalRisk === "low" ? "bg-green-900/40 text-green-400" :
+                                d.legalRisk === "medium" ? "bg-amber-900/40 text-amber-400" :
+                                "bg-red-900/40 text-red-400"
+                              )}>
+                                {d.legalRisk} legal risk
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">{d.description}</p>
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-400 mt-1 ml-5">{d.description}</p>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* PRESCRIPTIONS */}
+              {/* PRESCRIPTION ORDERS */}
               {carePlan.prescriptions.length > 0 && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-                    <span className="font-bold text-white text-sm">Prescriptions</span>
-                    <span className="text-xs text-teal-400">Ready to send to pharmacy</span>
+                <div className="rounded-2xl border border-gray-700/40 overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-800/70 border-b border-gray-700/40 flex items-center justify-between">
+                    <span className="font-bold text-white text-sm">Prescription Orders</span>
+                    <span className="text-xs font-mono text-gray-400">CPT: Main Rx</span>
                   </div>
-                  <div className="p-4 space-y-2">
-                    {carePlan.prescriptions.map((rx, i) => (
-                      <div key={i} className={cn("flex items-center justify-between p-3 rounded-xl border", statuses[`rx-${i}`] === "rejected" ? "border-red-700/30 opacity-50" : "border-teal-700/30 bg-teal-900/5")}>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-bold text-white text-sm">{rx.name} {rx.dosing}</p>
-                            {rx.controlled && <span className="text-xs px-1.5 py-0.5 bg-red-900/40 text-red-400 rounded">C-II</span>}
+                  <div className="p-3 space-y-2 bg-gray-900/40">
+                    {carePlan.prescriptions.map((rx, i) => {
+                      const removed = statuses[`rx-${i}`] === "rejected";
+                      return (
+                        <div key={i} className={cn("flex items-center justify-between gap-3 p-3 rounded-xl border", removed ? "border-red-700/30 opacity-50 bg-red-900/5" : "border-gray-700/50 bg-gray-800/30")}>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-white text-sm">{rx.name} {rx.dosing}</p>
+                              {rx.controlled && <span className="text-xs px-1.5 py-0.5 bg-red-900/40 text-red-400 rounded font-bold">C-II</span>}
+                            </div>
+                            <p className="text-xs text-gray-400 mt-0.5">{rx.route} · {rx.duration}</p>
+                            <p className="text-xs text-gray-500">{rx.pharmacy}</p>
                           </div>
-                          <p className="text-xs text-gray-400">{rx.route} · {rx.duration} · {rx.pharmacy}</p>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {!removed && (
+                              <span className="text-xs px-2 py-1 rounded-full bg-green-900/30 border border-green-700/40 text-green-400 font-semibold">Pending</span>
+                            )}
+                            <button
+                              onClick={() => toggle(`rx-${i}`)}
+                              className={cn("text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors",
+                                removed
+                                  ? "border-teal-700/40 bg-teal-900/20 text-teal-400 hover:bg-teal-900/40"
+                                  : "border-red-700/30 text-red-500 bg-red-900/10 hover:bg-red-900/20"
+                              )}
+                            >
+                              {removed ? "Restore" : "Remove"}
+                            </button>
+                          </div>
                         </div>
-                        <button onClick={() => toggle(`rx-${i}`)} className={cn("text-xs px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0 ml-2", statuses[`rx-${i}`] === "rejected" ? "border-gray-700 text-gray-500" : "border-teal-700/40 text-teal-400 bg-teal-900/20")}>
-                          {statuses[`rx-${i}`] === "rejected" ? "Removed" : "✓ Send"}
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1379,15 +1427,52 @@ RECURRING REVENUE INSTRUCTIONS:
                 </div>
               </div>
 
-              {/* SIGN BUTTON */}
-              <div className="pb-6">
+              {/* CHART OPTIONS + ACCEPT ALL */}
+              <div className="rounded-2xl border border-gray-700/40 overflow-hidden">
+                <div className="px-4 py-3 bg-gray-800/70 border-b border-gray-700/30">
+                  <p className="text-sm font-semibold text-gray-300">Chart Options:</p>
+                </div>
+                <div className="px-4 py-3 bg-gray-900/40 space-y-3">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="chartOption" defaultChecked className="accent-teal-500" />
+                      <span className="text-sm text-gray-300">Link to Company EHR (Epic, Cerner, etc.)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="chartOption" className="accent-teal-500" />
+                      <span className="text-sm text-gray-300">Use as Standalone EHR Record</span>
+                    </label>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        if (carePlan) navigator.clipboard?.writeText(JSON.stringify(carePlan, null, 2)).catch(() => {});
+                      }}
+                      className="flex-1 py-2.5 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      📋 Copy to Clipboard
+                    </button>
+                    <button className="flex-1 py-2.5 rounded-xl border border-blue-700/50 bg-blue-900/20 text-blue-400 text-sm font-medium hover:bg-blue-900/30 transition-colors flex items-center justify-center gap-1.5">
+                      ↗ Export to EHR
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pb-8">
                 {!signed ? (
-                  <button onClick={() => setShowConfirm(true)} className="w-full py-4 rounded-2xl bg-green-600 hover:bg-green-500 text-white text-base font-bold transition-colors shadow-lg">
-                    Sign & Send All — Chart · Rx · Labs · Billing
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setShowConfirm(true)}
+                      className="w-full py-4 rounded-2xl bg-green-600 hover:bg-green-500 text-white text-base font-bold transition-colors shadow-lg flex items-center justify-center gap-2"
+                    >
+                      ✈ Accept All &amp; Complete Visit
+                    </button>
+                    <p className="text-center text-xs text-gray-500 mt-2">Accepts care plan, sends prescriptions to pharmacy, and finalizes clinical note.</p>
+                  </>
                 ) : (
                   <div className="w-full py-4 rounded-2xl bg-green-900/40 border border-green-700/40 text-center">
-                    <p className="text-green-400 font-bold">✓ Chart Signed</p>
+                    <p className="text-green-400 font-bold">✓ Visit Complete</p>
                     <p className="text-xs text-gray-500 mt-0.5">Rx sent · Labs ordered · Claim submitted · Follow-up scheduled</p>
                   </div>
                 )}
