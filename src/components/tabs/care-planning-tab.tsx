@@ -12,7 +12,30 @@ export function CarePlanningTab() {
 
   function generate() {
     run(
-      "Generate a comprehensive, patient-centered care plan with: specific clinical goals with measurable outcomes, evidence-based interventions citing AHA/ADA/USPSTF guidelines, monitoring parameters and lab targets, patient education points, medication optimization review, follow-up schedule, and referral recommendations. Be specific and actionable.",
+      `Generate a comprehensive, patient-centered care plan formatted as a readable clinical document. Use plain text with clear section headers (no JSON, no code blocks). Structure it with these sections:
+
+## Clinical Goals
+(3-5 specific measurable goals with target values)
+
+## Evidence-Based Interventions
+(cite AHA/ADA/USPSTF/UpToDate; list specific interventions by category)
+
+## Medication Optimization
+(review current meds, dose adjustments, new recommendations with rationale)
+
+## Monitoring & Lab Targets
+(specific lab values to track, frequency, target ranges)
+
+## Patient Education
+(key teaching points tailored to this patient)
+
+## Follow-Up Schedule
+(specific timeframes and triggers for return visits)
+
+## Referrals & Consultations
+(who, why, urgency)
+
+Be specific, actionable, and cite evidence for each recommendation.`,
       `Patient: ${patient.name}, Age: ${patient.age}, Insurance: ${patient.insuranceProvider}
 Medical History: ${patient.medicalHistory.join(", ")}
 Medications: ${patient.medications.join(", ")}
@@ -71,11 +94,21 @@ Provider goals: ${goals || "Standard evidence-based management"}`
       </div>
 
       {(output || loading) && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <pre className="whitespace-pre-wrap text-sm text-gray-300 font-sans leading-relaxed">
-            {output}
-            {loading && <span className="inline-block w-0.5 h-4 bg-teal-400 animate-pulse ml-0.5 align-middle" />}
-          </pre>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-0">
+          {output.split("\n").map((line, i) => {
+            if (line.startsWith("## ")) {
+              return <h3 key={i} className="text-teal-400 font-semibold text-sm mt-4 mb-1.5 first:mt-0">{line.replace("## ", "")}</h3>;
+            }
+            if (line.startsWith("# ")) {
+              return <h2 key={i} className="text-white font-bold text-base mt-3 mb-2 first:mt-0">{line.replace("# ", "")}</h2>;
+            }
+            if (line.match(/^[\-\*] /)) {
+              return <p key={i} className="text-sm text-gray-300 leading-relaxed pl-3 flex gap-2"><span className="text-teal-500 flex-shrink-0">•</span><span>{line.replace(/^[\-\*] /, "")}</span></p>;
+            }
+            if (line.trim() === "") return <div key={i} className="h-1" />;
+            return <p key={i} className="text-sm text-gray-300 leading-relaxed">{line}</p>;
+          })}
+          {loading && <span className="inline-block w-0.5 h-4 bg-teal-400 animate-pulse ml-0.5 align-middle" />}
         </div>
       )}
     </div>
