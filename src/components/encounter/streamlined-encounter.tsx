@@ -114,6 +114,20 @@ type CarePlan = {
   returnHooks: ReturnHook[];
 };
 
+// Established patient time thresholds (CMS 2021, current 2025)
+const TIME_THRESHOLDS = [
+  { code: "99211", min: 0,  max: 9,  label: "Minimal" },
+  { code: "99212", min: 10, max: 19, label: "Low" },
+  { code: "99213", min: 20, max: 29, label: "Low-Moderate" },
+  { code: "99214", min: 30, max: 39, label: "Moderate" },
+  { code: "99215", min: 40, max: 54, label: "High" },
+  { code: "99215+G2212", min: 55, max: 999, label: "High + Prolonged" },
+];
+
+function getTimeCode(totalMinutes: number) {
+  return TIME_THRESHOLDS.find(t => totalMinutes >= t.min && totalMinutes <= t.max) ?? TIME_THRESHOLDS[0];
+}
+
 function useTimer() {
   const [seconds, setSeconds] = useState(0);
   const ref = useRef<NodeJS.Timeout | null>(null);
@@ -123,7 +137,7 @@ function useTimer() {
   }, []);
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
+  return { display: `${m}:${s.toString().padStart(2, "0")}`, totalMinutes: m, totalSeconds: seconds };
 }
 
 function ConfBadge({ value }: { value: number }) {
@@ -277,7 +291,11 @@ export function StreamlinedEncounter({ patient, appointment, onBack }: { patient
   const [vitals, setVitals] = useState({ bp: "", hr: "", temp: "", spo2: "", wt: "" });
   const [signed, setSigned] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const visitTime = useTimer();
+  const visitTimer = useTimer();
+  const [preVisitMinutes] = useState(8); // pre-visit chart review time
+  const totalEncounterMinutes = preVisitMinutes + visitTimer.totalMinutes;
+  const timeCode = getTimeCode(totalEncounterMinutes);
+  const nextThreshold = TIME_THRESHOLDS.find(t => t.min > totalEncounterMinutes);
   const aptTime = new Date(appointment.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const generate = useCallback(async () => {
@@ -487,8 +505,13 @@ Return this exact JSON:
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-          {/* Visit timer */}
-          <span className="text-xs font-mono px-2 py-1 bg-gray-800 text-gray-400 rounded border border-gray-700">⏱ {visitTime}</span>
+          {/* Visit timer + time-based billing code */}
+          <span className="text-xs font-mono px-2 py-1 bg-gray-800 text-gray-400 rounded border border-gray-700 flex items-center gap-1.5">
+            <span>⏱ {visitTimer.display}</span>
+            <span className="text-gray-600">|</span>
+            <span className="text-teal-400 font-semibold">{timeCode.code}</span>
+            <span className="text-gray-500">{totalEncounterMinutes}min</span>
+          </span>
           {criticalFlags.length > 0 && (
             <span className="text-xs px-2.5 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-700/40 font-bold animate-pulse">
               ⚠ {criticalFlags.length} Critical Flag{criticalFlags.length > 1 ? "s" : ""}
@@ -668,6 +691,53 @@ Return this exact JSON:
                   {carePlan.billing.modifiers.length > 0 && (
                     <p className="text-xs text-gray-500 mt-2">Modifiers: {carePlan.billing.modifiers.join(" · ")}</p>
                   )}
+
+                  {/* Time-based billing panel */}
+                  <div className="mt-3 pt-3 border-t border-gray-800">
+                    <p className="text-xs font-semibold text-gray-400 mb-2">
+                      Time-Based Billing Alternative
+                      <span className="text-gray-600 font-normal ml-1">(CMS 2021 — use whichever supports the higher code)</span>
+                    </p>
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      {TIME_THRESHOLDS.slice(1).map(t => {
+                        const active = totalEncounterMinutes >= t.min && totalEncounterMinutes <= t.max;
+                        const past = totalEncounterMinutes > t.max;
+                        return (
+                          <div key={t.code} className={cn(
+                            "flex flex-col items-center px-2.5 py-1.5 rounded-lg border text-xs transition-colors",
+                            active ? "border-teal-500 bg-teal-900/20 text-teal-300" :
+                            past ? "border-green-800/50 bg-green-900/10 text-green-600" :
+                            "border-gray-700 text-gray-600"
+                          )}>
+                            <span className="font-bold">{t.code}</span>
+                            <span className="text-xs opacity-70">{t.min}+ min</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
+                      <div>
+                        <p className="text-xs text-gray-400">
+                          Total encounter time: <span className="text-white font-semibold">{totalEncounterMinutes} min</span>
+                        </p>
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          Includes {preVisitMinutes} min pre-visit chart review + {visitTimer.totalMinutes} min face-to-face
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-teal-400">{timeCode.code}</p>
+                        <p className="text-xs text-gray-500">{timeCode.label}</p>
+                      </div>
+                    </div>
+                    {nextThreshold && (
+                      <p className="text-xs text-amber-400 mt-1.5">
+                        {nextThreshold.min - totalEncounterMinutes} more min → <span className="font-bold">{nextThreshold.code}</span> — add complexity documentation or additional counseling time
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-600 mt-1.5">
+                      Bill with: <span className="text-gray-400 font-medium">higher of MDM ({carePlan.billing.emCode}) or time-based ({timeCode.code})</span> — document chosen path in chart
+                    </p>
+                  </div>
                 </div>
               </div>
 
