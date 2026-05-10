@@ -1,38 +1,32 @@
 "use client";
 import { useState } from "react";
 import { samplePatients } from "@/lib/sampleData";
+import { useStreamingAI } from "@/hooks/use-streaming-ai";
 import { cn } from "@/lib/utils";
 
 export function InsuranceTab() {
   const [selectedId, setSelectedId] = useState(samplePatients[0].id);
-  const [analysis, setAnalysis] = useState("");
-  const [loading, setLoading] = useState(false);
   const [cptCodes, setCptCodes] = useState("");
+  const { output, loading, run, reset } = useStreamingAI();
   const patient = samplePatients.find(p => p.id === selectedId)!;
 
-  async function analyze() {
-    setLoading(true); setAnalysis("");
-    const res = await fetch("/api/ai", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: `Perform insurance optimization analysis:
-1. Likely coverage & authorization requirements
-2. ICD-10 code recommendations to maximize reimbursement
-3. CPT code bundling opportunities and restrictions
-4. Pre-authorization requirements
-5. Common denial reasons for this payer/dx combination and how to avoid them
-6. Documentation requirements to support billing
-7. Estimated reimbursement range`,
-        context: `Patient: ${patient.name}, Age: ${patient.age}
+  function analyze() {
+    run(
+      `Perform a comprehensive insurance optimization analysis:
+1. Coverage & prior authorization requirements for planned services
+2. ICD-10 code recommendations with maximum specificity to maximize reimbursement
+3. CPT code bundling opportunities and unbundling restrictions (CCI edits)
+4. Pre-authorization requirements and supporting documentation needed
+5. Common denial reasons for this payer/diagnosis combination and prevention strategies
+6. Medical necessity documentation requirements
+7. Estimated reimbursement breakdown by code with expected vs. contractual rates
+8. Appeal strategies if denied`,
+      `Patient: ${patient.name}, Age: ${patient.age}
 Insurance: ${patient.insuranceProvider} ${patient.insurancePlan}
 Medical History: ${patient.medicalHistory.join(", ")}
-Planned CPT Codes: ${cptCodes || "office visit E&M"}
-Revenue/Visit: $${patient.revenuePerVisit} | Payment Reliability: ${patient.paymentReliability}%`,
-      }),
-    });
-    const data = await res.json();
-    setAnalysis(data.reply || data.error);
-    setLoading(false);
+Planned CPT Codes: ${cptCodes || "office visit E&M (level TBD)"}
+Revenue/Visit: $${patient.revenuePerVisit} | Payment Reliability: ${patient.paymentReliability}%`
+    );
   }
 
   return (
@@ -41,7 +35,7 @@ Revenue/Visit: $${patient.revenuePerVisit} | Payment Reliability: ${patient.paym
         <div className="p-4 border-b border-gray-800"><h2 className="font-semibold text-white text-sm">Insurance Optimization</h2><p className="text-xs text-gray-400 mt-0.5">Maximize reimbursement</p></div>
         <div className="flex-1 overflow-y-auto p-2 space-y-2">
           {samplePatients.map(p => (
-            <button key={p.id} onClick={() => { setSelectedId(p.id); setAnalysis(""); }} className={cn("w-full text-left p-3 rounded-lg border transition-colors", selectedId === p.id ? "border-blue-500 bg-blue-600/10" : "border-gray-700 bg-gray-800/50 hover:border-gray-600")}>
+            <button key={p.id} onClick={() => { setSelectedId(p.id); reset(); }} className={cn("w-full text-left p-3 rounded-lg border transition-colors", selectedId === p.id ? "border-blue-500 bg-blue-600/10" : "border-gray-700 bg-gray-800/50 hover:border-gray-600")}>
               <p className="text-sm font-medium text-white">{p.name}</p>
               <p className="text-xs text-gray-400 mt-0.5">{p.insuranceProvider} · {p.insurancePlan}</p>
               <p className="text-xs text-emerald-400 mt-0.5">${p.revenuePerVisit}/visit</p>
@@ -62,9 +56,16 @@ Revenue/Visit: $${patient.revenuePerVisit} | Payment Reliability: ${patient.paym
               <label className="text-xs text-gray-400 block mb-1">Planned CPT Codes (optional)</label>
               <input type="text" value={cptCodes} onChange={e => setCptCodes(e.target.value)} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. 99214, 93000, 85025" />
             </div>
-            <button onClick={analyze} disabled={loading} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">{loading ? "Analyzing..." : "Run Insurance Analysis"}</button>
+            <button onClick={analyze} disabled={loading} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+              {loading && <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              {loading ? "Analyzing..." : "Run Insurance Analysis"}
+            </button>
           </div>
-          {analysis && <div className="bg-gray-900 border border-gray-800 rounded-xl p-5"><pre className="whitespace-pre-wrap text-sm text-gray-300 font-sans leading-relaxed">{analysis}</pre></div>}
+          {(output || loading) && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <pre className="whitespace-pre-wrap text-sm text-gray-300 font-sans leading-relaxed">{output}{loading && <span className="inline-block w-0.5 h-4 bg-blue-400 animate-pulse ml-0.5 align-middle" />}</pre>
+            </div>
+          )}
         </div>
       </div>
     </div>
