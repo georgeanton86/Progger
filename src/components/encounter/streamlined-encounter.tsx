@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { Patient, Appointment } from "@/lib/types";
+import { PatientAvatar } from "@/components/patient-avatar";
+import { useVoiceCommand } from "@/hooks/use-voice-command";
 
 function getInitials(name: string) {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -311,6 +313,8 @@ export function StreamlinedEncounter({ patient, appointment, onBack }: { patient
   const [vitals, setVitals] = useState({ bp: "", hr: "", temp: "", spo2: "", wt: "" });
   const [signed, setSigned] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [quickMode, setQuickMode] = useState(false);
+  const [showAutoBook, setShowAutoBook] = useState(false);
   const visitTimer = useTimer();
   const [preVisitMinutes] = useState(8); // pre-visit chart review time
   const totalEncounterMinutes = preVisitMinutes + visitTimer.totalMinutes;
@@ -572,6 +576,31 @@ RECURRING REVENUE INSTRUCTIONS:
     setStatuses(prev => ({ ...prev, [key]: prev[key] === "rejected" ? "accepted" : "rejected" }));
   }
 
+  function confirmAll() {
+    if (!carePlan) return;
+    const next: Record<string, SectionStatus> = {
+      assessment: "accepted", diagnostics: "accepted", treatmentPlan: "accepted",
+      patientEducation: "accepted", followUp: "accepted",
+    };
+    carePlan.prescriptions.forEach((_, i) => { next[`rx-${i}`] = "accepted"; });
+    carePlan.upsells.forEach((_, i) => { next[`upsell-${i}`] = "accepted"; });
+    setStatuses(next);
+  }
+
+  // "Hello PrognoSX" voice command
+  const voice = useVoiceCommand({
+    onCommand: cmd => {
+      if (cmd === "confirm-all") confirmAll();
+      else if (cmd === "sign") { if (carePlan && !signed) setShowConfirm(true); }
+      else if (cmd === "quick-mode") setQuickMode(m => !m);
+      else if (cmd === "back") onBack();
+      else if (cmd === "regenerate") generate();
+      else if (cmd === "reject-assessment") toggle("assessment");
+      else if (cmd === "reject-diagnostics") toggle("diagnostics");
+      else if (cmd === "reject-treatment") toggle("treatmentPlan");
+    },
+  });
+
   const criticalFlags = carePlan?.liabilityFlags.filter(f => f.severity === "critical") ?? [];
   const allAccepted = carePlan ? Object.values(statuses).every(s => s !== "rejected") : false;
   const totalRevenue = carePlan ? (carePlan.billing.totalBillable + carePlan.upsells.filter((_, i) => statuses[`upsell-${i}`] !== "rejected").reduce((s, u) => s + u.revenue, 0)) : 0;
@@ -583,9 +612,60 @@ RECURRING REVENUE INSTRUCTIONS:
         <ConfirmModal
           carePlan={carePlan}
           patient={patient}
-          onConfirm={() => { setSigned(true); setShowConfirm(false); }}
+          onConfirm={() => {
+            setSigned(true);
+            setShowConfirm(false);
+            if (carePlan.returnHooks.length > 0) setShowAutoBook(true);
+          }}
           onClose={() => setShowConfirm(false)}
         />
+      )}
+
+      {/* Auto-book return appointment modal */}
+      {showAutoBook && carePlan && carePlan.returnHooks[0] && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-2xl">📅</span>
+              <div>
+                <p className="text-white font-bold text-sm">Book Follow-Up?</p>
+                <p className="text-xs text-gray-400">Capture the next visit before they leave</p>
+              </div>
+            </div>
+            <div className="bg-gray-800 rounded-xl p-3 mb-4">
+              <p className="text-xs font-semibold text-teal-400 mb-1">{patient.name}</p>
+              <p className="text-sm text-white font-medium">{carePlan.returnHooks[0].trigger}</p>
+              <div className="flex items-center gap-3 mt-2">
+                <span className="text-xs px-2 py-0.5 bg-blue-900/30 text-blue-400 border border-blue-700/40 rounded-full">
+                  📆 {carePlan.returnHooks[0].timeframe}
+                </span>
+                <span className="text-xs px-2 py-0.5 bg-emerald-900/20 text-emerald-400 border border-emerald-700/30 rounded-full">
+                  ${carePlan.returnHooks[0].revenue} est.
+                </span>
+              </div>
+              {carePlan.returnHooks[0].qualityMeasure && (
+                <p className="text-xs text-purple-400 mt-1.5">✓ Satisfies: {carePlan.returnHooks[0].qualityMeasure}</p>
+              )}
+            </div>
+            {carePlan.returnHooks.length > 1 && (
+              <p className="text-xs text-gray-500 mb-3">+{carePlan.returnHooks.length - 1} more follow-up hooks available</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowAutoBook(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold transition-colors"
+              >
+                📅 Book Appointment
+              </button>
+              <button
+                onClick={() => setShowAutoBook(false)}
+                className="px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm transition-colors"
+              >
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Top bar */}
@@ -593,6 +673,8 @@ RECURRING REVENUE INSTRUCTIONS:
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={onBack} className="text-gray-500 hover:text-white text-sm flex-shrink-0">← Back</button>
           <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
+          {/* Patient avatar in top bar */}
+          <PatientAvatar patient={patient} size={32} />
           <div className="min-w-0">
             <span className="text-white font-bold">{patient.name}</span>
             <span className="text-gray-400 text-xs ml-2 hidden sm:inline">· Age {patient.age} · {aptTime}</span>
@@ -604,16 +686,44 @@ RECURRING REVENUE INSTRUCTIONS:
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+          {/* Voice listening indicator */}
+          {voice.supported && (
+            <div className={cn(
+              "flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-all",
+              voice.listening
+                ? "border-green-500/60 bg-green-900/30 text-green-300 animate-pulse"
+                : "border-gray-700 bg-gray-800/50 text-gray-600"
+            )}>
+              <span>{voice.listening ? "🎤" : "🎙"}</span>
+              <span className="hidden sm:inline font-medium">
+                {voice.lastCommand || (voice.listening ? "Listening…" : "Hello PrognoSX")}
+              </span>
+            </div>
+          )}
           {/* Visit timer + time-based billing code */}
           <span className="text-xs font-mono px-2 py-1 bg-gray-800 text-gray-400 rounded border border-gray-700 flex items-center gap-1.5">
             <span>⏱ {visitTimer.display}</span>
             <span className="text-gray-600">|</span>
             <span className="text-teal-400 font-semibold">{timeCode.code}</span>
-            <span className="text-gray-500">{totalEncounterMinutes}min</span>
+            <span className="text-gray-500 hidden sm:inline">{totalEncounterMinutes}min</span>
           </span>
+          {/* Quick Confirm Mode toggle */}
+          {carePlan && !generating && (
+            <button
+              onClick={() => setQuickMode(m => !m)}
+              className={cn(
+                "px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors border",
+                quickMode
+                  ? "bg-yellow-600/30 border-yellow-500/50 text-yellow-300"
+                  : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
+              )}
+            >
+              ⚡ {quickMode ? "Quick Mode ON" : "Quick Mode"}
+            </button>
+          )}
           {criticalFlags.length > 0 && (
             <span className="text-xs px-2.5 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-700/40 font-bold animate-pulse">
-              ⚠ {criticalFlags.length} Critical Flag{criticalFlags.length > 1 ? "s" : ""}
+              ⚠ {criticalFlags.length} Flag{criticalFlags.length > 1 ? "s" : ""}
             </span>
           )}
           {carePlan && (
@@ -623,7 +733,7 @@ RECURRING REVENUE INSTRUCTIONS:
               </span>
               {carePlan.recurringRevenue?.totalMonthly > 0 && (
                 <span className="text-xs px-2.5 py-1 rounded-full bg-purple-900/20 text-purple-400 border border-purple-700/40 font-semibold hidden sm:inline">
-                  +${carePlan.recurringRevenue.totalMonthly}/mo recurring
+                  +${carePlan.recurringRevenue.totalMonthly}/mo
                 </span>
               )}
             </div>
@@ -642,12 +752,40 @@ RECURRING REVENUE INSTRUCTIONS:
         </div>
       </div>
 
+      {/* Pre-room prep status bar */}
+      {carePlan && !generating && (
+        <div className={cn(
+          "border-b px-4 py-2 flex items-center gap-3 overflow-x-auto flex-shrink-0 text-xs",
+          signed
+            ? "bg-green-950/30 border-green-800/40"
+            : "bg-gray-900/60 border-gray-800"
+        )}>
+          <span className="text-gray-500 flex-shrink-0 font-semibold">Pre-Room:</span>
+          {[
+            { icon: "💊", label: `Rx queued → ${carePlan.prescriptions[0]?.pharmacy ?? "Pharmacy"}`, done: true },
+            { icon: "🧪", label: `${carePlan.diagnostics.items?.length ?? 0} labs ordered`, done: true },
+            { icon: "📱", label: "Patient education ready", done: true },
+            { icon: "📋", label: "SOAP complete", done: true },
+            { icon: "🔒", label: signed ? "Sent ✓" : "Awaiting signature", done: signed },
+          ].map(item => (
+            <span key={item.label} className={cn(
+              "flex items-center gap-1 px-2 py-0.5 rounded-full border flex-shrink-0 whitespace-nowrap",
+              item.done
+                ? "border-green-700/40 bg-green-900/20 text-green-400"
+                : "border-gray-700 text-gray-500"
+            )}>
+              {item.icon} {item.label}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Body */}
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         {/* Left panel */}
         <div className="w-full md:w-64 md:border-r border-b md:border-b-0 border-gray-800 overflow-y-auto bg-gray-900/40 flex-shrink-0 p-4 space-y-4 max-h-56 md:max-h-none">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold flex-shrink-0">{getInitials(patient.name)}</div>
+            <PatientAvatar patient={patient} size={48} />
             <div>
               <p className="font-bold text-white text-sm">{patient.name}</p>
               <p className="text-xs text-gray-400">{patient.insuranceProvider} · Age {patient.age}</p>
@@ -727,7 +865,102 @@ RECURRING REVENUE INSTRUCTIONS:
             </div>
           )}
 
-          {carePlan && !generating && (
+          {/* ── QUICK CONFIRM MODE ── */}
+          {carePlan && !generating && quickMode && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-yellow-400 font-bold">⚡ Quick Confirm — tap to reject</p>
+                <span className="text-xs text-gray-500">
+                  {Object.values(statuses).filter(s => s === "accepted").length} / {Object.keys(statuses).length} confirmed
+                </span>
+              </div>
+
+              {/* Liability flags always shown even in quick mode */}
+              {carePlan.liabilityFlags.filter(f => f.severity === "critical").map((f, i) => (
+                <div key={i} className="p-2.5 rounded-lg bg-red-900/20 border border-red-700/40 flex items-center gap-2">
+                  <span className="text-red-400 text-xs font-bold flex-shrink-0">⚠ CRITICAL</span>
+                  <p className="text-xs text-red-300 flex-1">{f.flag}</p>
+                </div>
+              ))}
+
+              {/* Compact section rows */}
+              {[
+                { key: "assessment", icon: "🔍", label: "Assessment", detail: carePlan.assessment.primary },
+                { key: "diagnostics", icon: "🧪", label: "Diagnostics", detail: (carePlan.diagnostics.items ?? []).slice(0, 2).join(" · ") },
+                { key: "treatmentPlan", icon: "💊", label: "Treatment", detail: (carePlan.treatmentPlan.items ?? []).slice(0, 2).join(" · ") },
+                { key: "patientEducation", icon: "📚", label: "Patient Education", detail: (carePlan.patientEducation.items ?? [])[0] },
+                { key: "followUp", icon: "📅", label: "Follow-Up", detail: (carePlan.followUp.items ?? [])[0] },
+              ].map(row => {
+                const st = statuses[row.key] ?? "accepted";
+                return (
+                  <button
+                    key={row.key}
+                    onClick={() => toggle(row.key)}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all",
+                      st === "rejected"
+                        ? "border-red-700/50 bg-red-900/10"
+                        : "border-green-700/40 bg-green-900/10"
+                    )}
+                  >
+                    <span className="text-lg flex-shrink-0">{row.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-xs font-bold", st === "rejected" ? "text-red-400" : "text-green-400")}>{row.label}</p>
+                      <p className="text-xs text-gray-400 truncate">{row.detail}</p>
+                    </div>
+                    <span className={cn("text-lg flex-shrink-0", st === "rejected" ? "text-red-500" : "text-green-500")}>
+                      {st === "rejected" ? "✗" : "✓"}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {/* Prescriptions */}
+              {carePlan.prescriptions.map((rx, i) => {
+                const st = statuses[`rx-${i}`] ?? "accepted";
+                return (
+                  <button
+                    key={i}
+                    onClick={() => toggle(`rx-${i}`)}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all",
+                      st === "rejected" ? "border-red-700/50 bg-red-900/10" : "border-green-700/40 bg-green-900/10"
+                    )}
+                  >
+                    <span className="text-lg flex-shrink-0">💊</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-xs font-bold", st === "rejected" ? "text-red-400" : "text-green-400")}>
+                        Rx: {rx.name}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">{rx.dosing} {rx.route} × {rx.duration}</p>
+                    </div>
+                    <span className={cn("text-lg flex-shrink-0", st === "rejected" ? "text-red-500" : "text-green-500")}>
+                      {st === "rejected" ? "✗" : "✓"}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {/* Confirm All + Sign buttons */}
+              <div className="pt-2 flex gap-2">
+                <button
+                  onClick={confirmAll}
+                  className="flex-1 py-3 rounded-xl bg-teal-700 hover:bg-teal-600 text-white text-sm font-bold transition-colors"
+                >
+                  ✓ Confirm All
+                </button>
+                <button
+                  onClick={() => setShowConfirm(true)}
+                  disabled={signed}
+                  className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white text-sm font-bold transition-colors"
+                >
+                  Sign & Send All
+                </button>
+              </div>
+            </div>
+          )}
+
+          {carePlan && !generating && !quickMode && (
             <>
               {/* CRITICAL LIABILITY FLAGS */}
               {carePlan.liabilityFlags.length > 0 && (

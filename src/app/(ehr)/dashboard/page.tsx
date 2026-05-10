@@ -11,7 +11,9 @@ import { PatientsTab } from "@/components/tabs/patients-tab";
 import { AppointmentsTab } from "@/components/tabs/appointments-tab";
 import { EhrIntegrationTab } from "@/components/tabs/ehr-integration-tab";
 import { SettingsTab } from "@/components/tabs/settings-tab";
+import { PatientAvatar, PatientHealthCard } from "@/components/patient-avatar";
 import { cn } from "@/lib/utils";
+import type { Patient } from "@/lib/types";
 
 const tabs = [
   { id: "dashboard", label: "Dashboard", icon: "⊙" },
@@ -60,6 +62,7 @@ function getInitials(name: string) {
 
 function DashboardHome() {
   const [now, setNow] = useState(new Date());
+  const [healthCardPatient, setHealthCardPatient] = useState<Patient | null>(null);
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
@@ -80,6 +83,11 @@ function DashboardHome() {
 
   return (
     <div className="p-6">
+      {/* Patient health card modal */}
+      {healthCardPatient && (
+        <PatientHealthCard patient={healthCardPatient} onClose={() => setHealthCardPatient(null)} />
+      )}
+
       {/* 4 KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatCard label="Today's Patients" value={stats.patientsToday} color="text-teal-400" />
@@ -107,20 +115,28 @@ function DashboardHome() {
             if (!patient) return null;
             const time = new Date(apt.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
             const hasScopeWarning = patient.noShowRate > 10 || patient.medicalHistory.some(h => h.toLowerCase().includes("copd"));
-            const avatarColor = hasScopeWarning ? "bg-amber-500" : "bg-teal-500";
             return (
               <div key={apt.id} className="border border-gray-200 rounded-xl p-4">
                 <div className="flex items-start gap-3">
-                  {/* Avatar */}
-                  <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
-                    {getInitials(patient.name)}
-                  </div>
+                  {/* Illustrated avatar — tap to open health card */}
+                  <button
+                    onClick={() => setHealthCardPatient(patient)}
+                    className="flex-shrink-0 hover:scale-105 transition-transform"
+                    title={`View ${patient.name}'s health card`}
+                  >
+                    <PatientAvatar patient={patient} size={44} />
+                  </button>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <p className="font-semibold text-gray-900">{patient.name}, {patient.age}</p>
+                      <button
+                        onClick={() => setHealthCardPatient(patient)}
+                        className="font-semibold text-gray-900 hover:text-teal-700 transition-colors text-left"
+                      >
+                        {patient.name}, {patient.age}
+                      </button>
                       <div className="flex items-center gap-3 text-sm text-gray-500">
                         <span>{time}</span>
-                        <span className="text-gray-700 font-medium">{patient.primaryComplaint}</span>
+                        <span className="text-gray-700 font-medium hidden sm:inline">{patient.primaryComplaint}</span>
                       </div>
                     </div>
                     <div className="mb-2">
@@ -130,7 +146,7 @@ function DashboardHome() {
                     {hasScopeWarning && (
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
                         <span className="text-amber-600 text-xs font-semibold">⚠ Scope Validation Recommended</span>
-                        <span className="text-amber-500 text-xs">· {patient.primaryComplaint} requires additional scope validation</span>
+                        <span className="text-amber-500 text-xs hidden sm:inline">· {patient.primaryComplaint} requires additional scope validation</span>
                       </div>
                     )}
                   </div>
@@ -150,9 +166,9 @@ function DashboardHome() {
             return (
               <div key={apt.id} className="bg-gray-800 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-9 h-9 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold">
-                    {getInitials(patient.name)}
-                  </div>
+                  <button onClick={() => setHealthCardPatient(patient)} className="flex-shrink-0 hover:scale-105 transition-transform">
+                    <PatientAvatar patient={patient} size={40} />
+                  </button>
                   <div>
                     <p className="font-semibold text-white">{patient.name}</p>
                     <p className="text-xs text-gray-400">{time} · {patient.primaryComplaint}</p>
