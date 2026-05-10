@@ -18,7 +18,7 @@ export const samplePatients: Patient[] = [
     insuranceProvider: "Blue Cross",
     insurancePlan: "PPO",
     primaryComplaint: "Upper respiratory symptoms",
-    hpiPreview: "Pt reports upper respiratory symptoms x 3 days including nasal congestion, sore throat, and mild fever. Denies SOB or chest pain.",
+    hpiPreview: "Called 8:15 AM — reported nasal congestion, sore throat, mild fever x 3 days. PrognoSX pre-chart built at 8:16 AM. Chart complete, Rx ready, DDX generated before patient arrives. First appointment 10:30 AM.",
     medicalHistory: ["Seasonal allergies"],
     medications: ["Claritin 10mg daily"],
     allergies: ["Amoxicillin - rash"],
@@ -35,7 +35,7 @@ export const samplePatients: Patient[] = [
     insuranceProvider: "Aetna",
     insurancePlan: "HMO",
     primaryComplaint: "Annual physical",
-    hpiPreview: "Pt presents for routine annual wellness visit. Reports good overall health with well-controlled hypertension on current regimen. Interested in diabetes prevention counseling.",
+    hpiPreview: "Online intake 9:10 AM — annual physical, HTN well-controlled, interested in diabetes prevention. Pre-chart built 9:11 AM. A1C, lipid panel, and DPP referral pre-ordered. Appointment 11:00 AM.",
     medicalHistory: ["Hypertension", "Prediabetes"],
     medications: ["Lisinopril 10mg", "Metformin 500mg"],
     allergies: ["None"],
@@ -52,7 +52,7 @@ export const samplePatients: Patient[] = [
     insuranceProvider: "Kaiser",
     insurancePlan: "HMO",
     primaryComplaint: "Chronic cough",
-    hpiPreview: "Pt reports persistent dry cough x 6 weeks, worsening at night and with exercise. Uses albuterol 2-3x/week with partial relief. Denies fever or productive sputum.",
+    hpiPreview: "Waiting room tablet 12:45 PM — persistent cough x 6 wks, using albuterol 2-3x/week. Pre-chart built 12:46 PM. Spirometry pre-ordered, step-up therapy ready for review. Appointment 1:30 PM.",
     medicalHistory: ["Asthma", "Eczema"],
     medications: ["Albuterol PRN", "Fluticasone inhaler"],
     allergies: ["Penicillin"],
@@ -69,7 +69,7 @@ export const samplePatients: Patient[] = [
     insuranceProvider: "Medicare",
     insurancePlan: "Part B",
     primaryComplaint: "Bronchitis follow-up",
-    hpiPreview: "Pt returns for follow-up of acute bronchitis diagnosed 2 weeks ago. Reports improvement in productive cough but notes persistent exertional dyspnea. COPD baseline SpO2 reported at 94% at home.",
+    hpiPreview: "Called 1:15 PM — improving cough but new exertional dyspnea, home SpO2 94%. Pre-chart built 1:16 PM. Spirometry, COPD exacerbation protocol, Medicare AWV overdue flagged — $185 liability + quality miss. Appointment 3:00 PM.",
     medicalHistory: ["COPD", "Tobacco use disorder"],
     medications: ["Spiriva 18mcg", "Advair 250/50"],
     allergies: ["Sulfa"],
@@ -86,7 +86,7 @@ export const samplePatients: Patient[] = [
     insuranceProvider: "Medicare Advantage",
     insurancePlan: "Gold Plus",
     primaryComplaint: "CHF management",
-    hpiPreview: "Pt with known systolic CHF presents for routine disease management. Reports 2 lbs weight gain over past week and mild ankle edema bilaterally. Denies orthopnea or PND.",
+    hpiPreview: "Called 10:20 AM — 2 lb weight gain this week, mild ankle edema. Pre-chart built 10:21 AM. Diuretic adjustment ready, BMP pre-ordered, liability flag: no BNP in 6 months. Appointment 11:45 AM.",
     medicalHistory: ["CHF - systolic", "Type 2 Diabetes", "CKD Stage 3"],
     medications: ["Lasix 40mg", "Carvedilol 12.5mg", "Empagliflozin 10mg", "Insulin glargine 20u QHS"],
     allergies: ["ACE inhibitors - angioedema", "Contrast dye"],
@@ -103,7 +103,7 @@ export const samplePatients: Patient[] = [
     insuranceProvider: "United Health",
     insurancePlan: "Choice Plus PPO",
     primaryComplaint: "Migraines with aura",
-    hpiPreview: "Pt reports 3 migraine episodes in past 2 weeks, each preceded by visual aura lasting 20-30 min. Sumatriptan partially effective. Requests medication adjustment to reduce frequency.",
+    hpiPreview: "Online intake 11:30 AM — 3 migraines in 2 weeks with visual aura, sumatriptan partial relief. Pre-chart built 11:31 AM. CGRP antagonist candidate flagged, thyroid check due, PHQ-9 depression screen overdue. Appointment 12:30 PM.",
     medicalHistory: ["Chronic migraines", "Generalized anxiety disorder", "Hypothyroidism"],
     medications: ["Topiramate 50mg", "Sertraline 100mg", "Levothyroxine 88mcg", "Sumatriptan 100mg PRN"],
     allergies: ["Aspirin - GI bleed"],
@@ -120,7 +120,7 @@ export const samplePatients: Patient[] = [
     insuranceProvider: "Cigna",
     insurancePlan: "Open Access Plus",
     primaryComplaint: "Low back pain - new",
-    hpiPreview: "Pt reports acute onset low back pain x 4 days after lifting heavy equipment at work. Pain rated 6/10, worse with forward flexion. Denies radiation to lower extremities or bowel/bladder changes.",
+    hpiPreview: "Walk-in 2:30 PM — acute LBP x 4 days, lifting injury, 6/10 pain, worse flexion, no radiation or bowel/bladder changes. Pre-chart built 2:31 PM. Ottawa rules applied, workers comp billing flagged, Rx NSAID ready (check: no allergy). Appointment 3:45 PM.",
     medicalHistory: ["No significant PMH"],
     medications: ["Ibuprofen 400mg PRN"],
     allergies: ["None"],
@@ -137,7 +137,7 @@ export const samplePatients: Patient[] = [
     insuranceProvider: "Blue Shield",
     insurancePlan: "PPO Select",
     primaryComplaint: "Weight management follow-up",
-    hpiPreview: "Pt returns for GLP-1 agonist follow-up. Reports 8 lbs weight loss since last visit with good medication tolerance. CPAP compliance improved to 6.2 hrs/night. Requesting Ozempic dose escalation.",
+    hpiPreview: "Patient portal 1:45 PM — 8 lb weight loss on Ozempic, CPAP compliance 6.2 hrs/night, requesting dose escalation. Pre-chart built 1:46 PM. Prior auth pre-filled, LFTs flagged (NAFLD), sleep study referral revenue hook $165. Appointment 2:15 PM.",
     medicalHistory: ["Obesity (BMI 38)", "Hypothyroidism", "OSA on CPAP", "Non-alcoholic fatty liver"],
     medications: ["Levothyroxine 100mcg", "Ozempic 0.5mg weekly", "CPAP 10 cmH2O"],
     allergies: ["Codeine - nausea", "Latex"],
@@ -148,16 +148,22 @@ export const samplePatients: Patient[] = [
   },
 ];
 
-const today = new Date().toISOString().split("T")[0];
+// Use local time so times display correctly in any timezone
+function localApptTime(hour: number, minute = 0): string {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+}
+
 export const sampleAppointments: Appointment[] = [
-  { id: "a1", patientId: "p1", providerId: "prov-1", appointmentTime: `${today}T08:30:00Z`, visitType: "office-visit", status: "scheduled", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "165.00" },
-  { id: "a2", patientId: "p2", providerId: "prov-1", appointmentTime: `${today}T09:15:00Z`, visitType: "office-visit", status: "checked-in", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "285.00" },
-  { id: "a3", patientId: "p5", providerId: "prov-1", appointmentTime: `${today}T10:00:00Z`, visitType: "office-visit", status: "scheduled", preVisitComplete: false, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "340.00" },
-  { id: "a4", patientId: "p6", providerId: "prov-1", appointmentTime: `${today}T11:00:00Z`, visitType: "office-visit", status: "checked-in", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "255.00" },
-  { id: "a5", patientId: "p3", providerId: "prov-1", appointmentTime: `${today}T13:30:00Z`, visitType: "office-visit", status: "scheduled", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "195.00" },
-  { id: "a6", patientId: "p8", providerId: "prov-1", appointmentTime: `${today}T14:15:00Z`, visitType: "office-visit", status: "scheduled", preVisitComplete: false, scopeStatus: "within_scope", insuranceVerified: false, estimatedRevenue: "210.00" },
-  { id: "a7", patientId: "p4", providerId: "prov-1", appointmentTime: `${today}T15:00:00Z`, visitType: "office-visit", status: "scheduled", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "220.00" },
-  { id: "a8", patientId: "p7", providerId: "prov-1", appointmentTime: `${today}T15:45:00Z`, visitType: "office-visit", status: "scheduled", preVisitComplete: false, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "145.00" },
+  { id: "a1", patientId: "p1", providerId: "prov-1", appointmentTime: localApptTime(10, 30), visitType: "office-visit", status: "scheduled", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "165.00" },
+  { id: "a2", patientId: "p2", providerId: "prov-1", appointmentTime: localApptTime(11, 0), visitType: "office-visit", status: "checked-in", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "285.00" },
+  { id: "a3", patientId: "p5", providerId: "prov-1", appointmentTime: localApptTime(11, 45), visitType: "office-visit", status: "scheduled", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "340.00" },
+  { id: "a4", patientId: "p6", providerId: "prov-1", appointmentTime: localApptTime(12, 30), visitType: "office-visit", status: "checked-in", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "255.00" },
+  { id: "a5", patientId: "p3", providerId: "prov-1", appointmentTime: localApptTime(13, 30), visitType: "office-visit", status: "scheduled", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "195.00" },
+  { id: "a6", patientId: "p8", providerId: "prov-1", appointmentTime: localApptTime(14, 15), visitType: "office-visit", status: "scheduled", preVisitComplete: false, scopeStatus: "within_scope", insuranceVerified: false, estimatedRevenue: "210.00" },
+  { id: "a7", patientId: "p4", providerId: "prov-1", appointmentTime: localApptTime(15, 0), visitType: "office-visit", status: "scheduled", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "220.00" },
+  { id: "a8", patientId: "p7", providerId: "prov-1", appointmentTime: localApptTime(15, 45), visitType: "office-visit", status: "scheduled", preVisitComplete: false, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "145.00" },
 ];
 
 export const sampleStats: DashboardStats = {
