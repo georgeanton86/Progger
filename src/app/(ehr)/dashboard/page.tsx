@@ -179,6 +179,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [specialty, setSpecialty] = useState(sampleProvider.specialty);
   const [recording, setRecording] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -186,17 +187,33 @@ export default function DashboardPage() {
     return () => clearInterval(t);
   }, []);
 
-  const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const dateStr = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+  function handleTabSelect(tabId: string) {
+    setActiveTab(tabId);
+    setSidebarOpen(false);
+  }
+
   return (
-    <div className="flex h-screen bg-gray-950">
+    <div className="flex h-screen bg-gray-950 overflow-hidden">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-20 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-60 bg-gray-900 border-r border-gray-800 flex flex-col flex-shrink-0">
+      <aside className={cn(
+        "fixed md:relative inset-y-0 left-0 z-30 w-60 bg-gray-900 border-r border-gray-800 flex flex-col flex-shrink-0 transition-transform duration-200",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+      )}>
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold">Rx</div>
-            <div>
+            <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">Rx</div>
+            <div className="min-w-0">
               <p className="font-semibold text-white text-sm">PrognoSX</p>
               <p className="text-xs text-gray-400">AI Medical Intelligence</p>
             </div>
@@ -206,9 +223,9 @@ export default function DashboardPage() {
           {tabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabSelect(tab.id)}
               className={cn(
-                "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left",
+                "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors text-left",
                 activeTab === tab.id ? "bg-teal-600/20 text-teal-400 font-medium" : "text-gray-400 hover:text-white hover:bg-gray-800"
               )}
             >
@@ -226,33 +243,39 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Header bar */}
-        <div className="border-b border-gray-800 px-5 py-3 flex items-center justify-between flex-shrink-0 bg-gray-900">
+        <div className="border-b border-gray-800 px-3 md:px-5 py-3 flex items-center gap-3 flex-shrink-0 bg-gray-900">
+          {/* Hamburger (mobile only) */}
+          <button
+            onClick={() => setSidebarOpen(o => !o)}
+            className="md:hidden p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors flex-shrink-0"
+            aria-label="Open menu"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
           {/* Left */}
-          <div>
-            <p className="font-bold text-white text-sm">PrognoSX Dashboard</p>
-            <p className="text-gray-500 text-xs">{dateStr} · {timeStr}</p>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-white text-sm truncate">PrognoSX</p>
+            <p className="text-gray-500 text-xs hidden sm:block">{dateStr} · {timeStr}</p>
           </div>
 
           {/* Center: specialty selector */}
-          <div>
-            <select
-              value={specialty}
-              onChange={e => setSpecialty(e.target.value)}
-              className="bg-gray-800 text-gray-200 text-sm border border-gray-700 rounded-lg px-3 py-1.5 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-            >
-              {specialties.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={specialty}
+            onChange={e => setSpecialty(e.target.value)}
+            className="hidden sm:block bg-gray-800 text-gray-200 text-sm border border-gray-700 rounded-lg px-3 py-1.5 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 flex-shrink-0"
+          >
+            {specialties.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
 
           {/* Right */}
-          <div className="flex items-center gap-3">
-            <button className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800" title="Toggle dark mode">
-              🌙
-            </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={() => setRecording(r => !r)}
               className={cn(
@@ -260,9 +283,10 @@ export default function DashboardPage() {
                 recording ? "bg-red-600 hover:bg-red-700 text-white" : "bg-teal-500 hover:bg-teal-600 text-white"
               )}
             >
-              {recording ? "⏹ Stop Recording" : "🎤 Hello Progno"}
+              <span>{recording ? "⏹" : "🎤"}</span>
+              <span className="hidden sm:inline">{recording ? "Stop" : "Hello Progno"}</span>
             </button>
-            <span className="text-gray-400 text-sm">{sampleProvider.name}</span>
+            <span className="text-gray-400 text-xs hidden lg:block truncate max-w-32">{sampleProvider.name}</span>
           </div>
         </div>
 
