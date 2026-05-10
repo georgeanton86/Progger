@@ -197,17 +197,17 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-screen bg-gray-950 overflow-hidden">
-      {/* Mobile overlay */}
+      {/* Overlay — shown on mobile when sidebar is open */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-20 md:hidden"
+          className="fixed inset-0 bg-black/60 z-20"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — always fixed, always same element */}
       <aside className={cn(
-        "fixed md:relative inset-y-0 left-0 z-30 w-60 bg-gray-900 border-r border-gray-800 flex flex-col flex-shrink-0 transition-transform duration-200",
+        "fixed inset-y-0 left-0 z-30 w-64 bg-gray-900 border-r border-gray-800 flex flex-col flex-shrink-0 transition-transform duration-200",
         sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
         <div className="p-4 border-b border-gray-800">
@@ -242,14 +242,14 @@ export default function DashboardPage() {
         </div>
       </aside>
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      {/* Main area — pushed right by sidebar width on desktop */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 md:ml-64">
         {/* Header bar */}
         <div className="border-b border-gray-800 px-3 md:px-5 py-3 flex items-center gap-3 flex-shrink-0 bg-gray-900">
           {/* Hamburger (mobile only) */}
           <button
             onClick={() => setSidebarOpen(o => !o)}
-            className="md:hidden p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors flex-shrink-0"
+            className="md:hidden p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors flex-shrink-0"
             aria-label="Open menu"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
