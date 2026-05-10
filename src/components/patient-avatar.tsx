@@ -59,23 +59,19 @@ function avatarConfig(patient: Patient) {
 }
 
 // ── Core SVG face ─────────────────────────────────────────────────────────────
-function FaceSVG({ patient, uid }: { patient: Patient; uid: string }) {
+// Note: circular clipping is handled by the parent div (overflow-hidden rounded-full)
+// so no clipPath needed inside the SVG — clipPath on SVG fails on Android Chrome
+function FaceSVG({ patient }: { patient: Patient }) {
   const p = avatarConfig(patient);
   const senior = patient.age >= 60;
 
   return (
     <svg width="100%" height="100%" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <clipPath id={`cp${uid}`}>
-          <circle cx="50" cy="50" r="50" />
-        </clipPath>
-      </defs>
-
       {/* Background — two-tone split for depth without gradient (mobile-safe) */}
       <circle cx="50" cy="50" r="50" fill={p.g2} />
       <ellipse cx="50" cy="22" rx="50" ry="32" fill={p.g1} opacity="0.6" />
 
-      <g clipPath={`url(#cp${uid})`}>
+      <g>
         {/* Clothes / shoulders */}
         <ellipse cx="50" cy="108" rx="48" ry="26" fill={p.clothes} />
         <rect x="2" y="90" width="96" height="20" fill={p.clothes} />
@@ -158,7 +154,7 @@ export function PatientAvatar({ patient, size = 48 }: { patient: Patient; size?:
   return (
     <div className="relative inline-block flex-shrink-0" style={{ width: size, height: size }}>
       <div className="w-full h-full rounded-full overflow-hidden" style={{ width: size, height: size }}>
-        <FaceSVG patient={patient} uid={`${patient.id}-${size}`} />
+        <FaceSVG patient={patient} />
       </div>
       {size >= 44 && (
         <div

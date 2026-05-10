@@ -12,8 +12,9 @@ import { AppointmentsTab } from "@/components/tabs/appointments-tab";
 import { EhrIntegrationTab } from "@/components/tabs/ehr-integration-tab";
 import { SettingsTab } from "@/components/tabs/settings-tab";
 import { PatientAvatar, PatientHealthCard } from "@/components/patient-avatar";
+import { StreamlinedEncounter } from "@/components/encounter/streamlined-encounter";
 import { cn } from "@/lib/utils";
-import type { Patient } from "@/lib/types";
+import type { Patient, Appointment } from "@/lib/types";
 
 const tabs = [
   { id: "dashboard", label: "Dashboard", icon: "⊙" },
@@ -60,7 +61,7 @@ function getInitials(name: string) {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
-function DashboardHome() {
+function DashboardHome({ onOpenEncounter }: { onOpenEncounter: (patient: Patient, apt: Appointment) => void }) {
   const [now, setNow] = useState(new Date());
   const [healthCardPatient, setHealthCardPatient] = useState<Patient | null>(null);
   useEffect(() => {
@@ -129,8 +130,8 @@ function DashboardHome() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <button
-                        onClick={() => setHealthCardPatient(patient)}
-                        className="font-semibold text-gray-900 hover:text-teal-700 transition-colors text-left"
+                        onClick={() => onOpenEncounter(patient, apt)}
+                        className="font-semibold text-gray-900 hover:text-teal-600 transition-colors text-left underline-offset-2 hover:underline"
                       >
                         {patient.name}, {patient.age}
                       </button>
@@ -197,6 +198,7 @@ export default function DashboardPage() {
   const [recording, setRecording] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [now, setNow] = useState(new Date());
+  const [encounterCtx, setEncounterCtx] = useState<{ patient: Patient; apt: Appointment } | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -308,17 +310,27 @@ export default function DashboardPage() {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto bg-gray-950">
-          {activeTab === "dashboard" && <DashboardHome />}
-          {activeTab === "pre-visit" && <PreVisitTab />}
-          {activeTab === "scope" && <ScopeValidationTab />}
-          {activeTab === "care-planning" && <CarePlanningTab />}
-          {activeTab === "briefing" && <ProtectiveBriefingTab />}
-          {activeTab === "insurance" && <InsuranceTab />}
-          {activeTab === "revenue" && <RevenueTab />}
-          {activeTab === "patients" && <PatientsTab />}
-          {activeTab === "appointments" && <AppointmentsTab />}
-          {activeTab === "ehr" && <EhrIntegrationTab />}
-          {activeTab === "settings" && <SettingsTab />}
+          {/* Encounter overlay — takes over the entire content area */}
+          {encounterCtx && (
+            <StreamlinedEncounter
+              patient={encounterCtx.patient}
+              appointment={encounterCtx.apt}
+              onBack={() => setEncounterCtx(null)}
+            />
+          )}
+          {!encounterCtx && activeTab === "dashboard" && (
+            <DashboardHome onOpenEncounter={(patient, apt) => setEncounterCtx({ patient, apt })} />
+          )}
+          {!encounterCtx && activeTab === "pre-visit" && <PreVisitTab />}
+          {!encounterCtx && activeTab === "scope" && <ScopeValidationTab />}
+          {!encounterCtx && activeTab === "care-planning" && <CarePlanningTab />}
+          {!encounterCtx && activeTab === "briefing" && <ProtectiveBriefingTab />}
+          {!encounterCtx && activeTab === "insurance" && <InsuranceTab />}
+          {!encounterCtx && activeTab === "revenue" && <RevenueTab />}
+          {!encounterCtx && activeTab === "patients" && <PatientsTab />}
+          {!encounterCtx && activeTab === "appointments" && <AppointmentsTab />}
+          {!encounterCtx && activeTab === "ehr" && <EhrIntegrationTab />}
+          {!encounterCtx && activeTab === "settings" && <SettingsTab />}
         </main>
       </div>
     </div>

@@ -308,16 +308,19 @@ function ConfirmModal({ carePlan, patient, onConfirm, onClose }: { carePlan: Car
 function parseCarePlanJSON(text: string): CarePlan {
   const start = text.indexOf("{");
   if (start === -1) throw new Error("No JSON in response");
-  let json = text.slice(start);
+  const json = text.slice(start);
 
-  // First try as-is (happy path)
-  try { return JSON.parse(json) as CarePlan; } catch { /* continue to repair */ }
+  // Happy path — valid complete JSON
+  try { return JSON.parse(json) as CarePlan; } catch { /* repair */ }
 
-  // Repair: walk the string tracking nesting depth, trim to last complete value
+  // Walk the string tracking brace/bracket depth.
+  // Track the last position where depth dropped from ≥2 back to 1 — that means
+  // a top-level property value just finished. We can safely cut there and close
+  // the root object. This correctly handles mid-JSON truncation.
   let depth = 0;
   let inStr = false;
   let esc = false;
-  let lastSafeClose = 0;
+  let lastCompleteAt1 = 0; // char index AFTER the last "}" or "]" that brought depth 2→1
 
   for (let i = 0; i < json.length; i++) {
     const c = json[i];
@@ -326,28 +329,15 @@ function parseCarePlanJSON(text: string): CarePlan {
     if (c === '"') { inStr = !inStr; continue; }
     if (inStr) continue;
     if (c === "{" || c === "[") depth++;
-    if (c === "}" || c === "]") { depth--; if (depth === 0) lastSafeClose = i + 1; }
+    if (c === "}" || c === "]") {
+      depth--;
+      if (depth === 1) lastCompleteAt1 = i + 1;
+    }
   }
 
-  // Trim to last safely closed top-level object
-  if (lastSafeClose > 0) {
-    try { return JSON.parse(json.slice(0, lastSafeClose)) as CarePlan; } catch { /* continue */ }
-  }
-
-  // Last resort: strip trailing partial key/value and close open braces
-  json = json.replace(/,\s*"[^"]*"\s*:\s*[^,}\]]*$/, "");
-  let closeDepth = 0;
-  let d2 = 0;
-  let s2 = false;
-  for (const c of json) {
-    if (s2) { if (c === '"') s2 = false; continue; }
-    if (c === '"') { s2 = true; continue; }
-    if (c === "{" || c === "[") d2++;
-    if (c === "}" || c === "]") d2--;
-  }
-  closeDepth = d2;
-  if (closeDepth > 0) {
-    try { return JSON.parse(json + "}".repeat(closeDepth)) as CarePlan; } catch { /* fall through */ }
+  // Slice to last complete top-level property value, then close root object
+  if (lastCompleteAt1 > 0) {
+    try { return JSON.parse(json.slice(0, lastCompleteAt1) + "}") as CarePlan; } catch { /* continue */ }
   }
 
   throw new Error("Could not parse AI response — please retry");
