@@ -66,17 +66,14 @@ function FaceSVG({ patient, uid }: { patient: Patient; uid: string }) {
   return (
     <svg width="100%" height="100%" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id={`bg${uid}`} cx="35%" cy="30%" r="80%">
-          <stop offset="0%" stopColor={p.g1} />
-          <stop offset="100%" stopColor={p.g2} />
-        </radialGradient>
         <clipPath id={`cp${uid}`}>
           <circle cx="50" cy="50" r="50" />
         </clipPath>
       </defs>
 
-      {/* Background */}
-      <circle cx="50" cy="50" r="50" fill={`url(#bg${uid})`} />
+      {/* Background — two-tone split for depth without gradient (mobile-safe) */}
+      <circle cx="50" cy="50" r="50" fill={p.g2} />
+      <ellipse cx="50" cy="22" rx="50" ry="32" fill={p.g1} opacity="0.6" />
 
       <g clipPath={`url(#cp${uid})`}>
         {/* Clothes / shoulders */}
