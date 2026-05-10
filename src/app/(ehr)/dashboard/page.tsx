@@ -42,10 +42,30 @@ function DashboardHome() {
 
   return (
     <div className="p-6">
+      {/* AI Status Banner */}
+      <div className="mb-5 flex items-center gap-3 px-4 py-2.5 bg-blue-950/40 border border-blue-800/30 rounded-xl">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-xs font-semibold text-green-400">PrognoSX AI Online</span>
+        </div>
+        <div className="h-3 w-px bg-blue-800/50" />
+        <div className="flex items-center gap-4 text-xs text-blue-300/70 overflow-x-auto flex-nowrap">
+          <span>Model: claude-sonnet-4-6</span>
+          <span>·</span>
+          <span>Uptime: 99.9%</span>
+          <span>·</span>
+          <span>Processing: 847 patients/hour</span>
+          <span>·</span>
+          <span>Latency: 1.2s avg</span>
+          <span>·</span>
+          <span>Last update: {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+        </div>
+      </div>
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">PrognoSX Dashboard</h1>
         <p className="text-gray-400 text-sm mt-0.5">{today}</p>
-        <p className="text-xs text-gray-500 mt-0.5">Provider: {sampleProvider.name} · {sampleProvider.specialty}</p>
+        <p className="text-xs text-gray-500 mt-0.5">Provider: {sampleProvider.name} · {sampleProvider.specialty} · {sampleProvider.credentials}</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
@@ -87,22 +107,47 @@ function DashboardHome() {
 
         <div className="space-y-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h2 className="font-semibold text-white mb-3">Connection Status</h2>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-              <span className="text-sm text-green-400">Connected</span>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-white">System Status</h2>
+              <span className="text-xs text-green-400 bg-green-900/20 px-2 py-0.5 rounded-full border border-green-700/40">All Systems Go</span>
             </div>
-            <p className="text-xs text-gray-500">Last sync: just now</p>
-            <p className="text-xs text-gray-500 mt-0.5">EHR: {sampleProvider.ehrSystem}</p>
+            <div className="space-y-2">
+              {[
+                { label: "AI Engine", status: "Online", color: "text-green-400" },
+                { label: `EHR (${sampleProvider.ehrSystem})`, status: "Connected", color: "text-green-400" },
+                { label: "Insurance Verification", status: "Active", color: "text-green-400" },
+                { label: "Revenue Tracking", status: "Live", color: "text-blue-400" },
+              ].map(item => (
+                <div key={item.label} className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{item.label}</span>
+                  <span className={`text-xs font-medium ${item.color}`}>{item.status}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h2 className="font-semibold text-white mb-3">Quick Actions</h2>
+            <h2 className="font-semibold text-white mb-3">Top Revenue Opportunities</h2>
             <div className="space-y-2">
-              <button className="w-full text-left px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors">Start Pre-Visit Charting</button>
-              <button className="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded-lg transition-colors">View Revenue Opportunities</button>
-              <button className="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded-lg transition-colors">Export Notes</button>
-              <button className="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded-lg transition-colors">Schedule Appointment</button>
+              {sampleRevenueOpportunities.slice(0, 3).map(opp => (
+                <div key={opp.id} className="flex items-start justify-between gap-2">
+                  <p className="text-xs text-gray-400 flex-1">{opp.opportunityType}</p>
+                  <span className="text-xs font-bold text-emerald-400 flex-shrink-0">${opp.estimatedRevenue}</span>
+                </div>
+              ))}
+              <p className="text-xs text-gray-600 mt-1">{sampleRevenueOpportunities.length} total opportunities identified</p>
+            </div>
+          </div>
+
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <h2 className="font-semibold text-white mb-3">Scope Alerts</h2>
+            <div className="space-y-2">
+              {sampleScopeAlerts.map(alert => (
+                <div key={alert.id} className="flex items-start justify-between gap-2">
+                  <p className="text-xs text-gray-400 flex-1">{alert.procedure}</p>
+                  <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${alert.riskLevel === "high" ? "bg-red-900/40 text-red-400" : alert.riskLevel === "medium" ? "bg-yellow-900/40 text-yellow-400" : "bg-green-900/40 text-green-400"}`}>{alert.riskLevel}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
