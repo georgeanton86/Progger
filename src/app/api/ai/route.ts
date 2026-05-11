@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "edge";
-
 const systemPrompt = `You are PrognoSX, an elite AI predictive charting engine for licensed healthcare providers in California.
 
 Your mission: Before the patient walks in the door, build the ENTIRE visit. Given a chief complaint and patient history, you:
@@ -19,13 +17,18 @@ You cite evidence for everything. You are specialty-aware (Family Practice, Orth
 When returning JSON, return ONLY valid JSON — no markdown, no explanation, no wrapping text.`;
 
 export async function POST(req: NextRequest) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: "ANTHROPIC_API_KEY is not configured in environment" }, { status: 500 });
+  }
+
   const { prompt, context, stream: useStream } = await req.json();
   const fullPrompt = context ? `Context:\n${context}\n\nTask: ${prompt}` : prompt;
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
-      "x-api-key": process.env.ANTHROPIC_API_KEY || "",
+      "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
     },
@@ -40,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   if (!response.ok) {
     const errBody = await response.text().catch(() => "");
-    return NextResponse.json({ error: `AI ${response.status}: ${errBody.slice(0, 300)}` }, { status: 500 });
+    return NextResponse.json({ error: `Anthropic ${response.status}: ${errBody.slice(0, 300)}` }, { status: 500 });
   }
 
   if (useStream) {
