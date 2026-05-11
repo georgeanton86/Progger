@@ -12,15 +12,30 @@ export function InsuranceTab() {
 
   function analyze() {
     run(
-      `Perform a comprehensive insurance optimization analysis:
-1. Coverage & prior authorization requirements for planned services
-2. ICD-10 code recommendations with maximum specificity to maximize reimbursement
-3. CPT code bundling opportunities and unbundling restrictions (CCI edits)
-4. Pre-authorization requirements and supporting documentation needed
-5. Common denial reasons for this payer/diagnosis combination and prevention strategies
-6. Medical necessity documentation requirements
-7. Estimated reimbursement breakdown by code with expected vs. contractual rates
-8. Appeal strategies if denied`,
+      `Perform a comprehensive insurance optimization analysis. Format as a readable clinical document — plain text with clear section headers. No JSON, no code blocks. Use this structure:
+
+## Coverage & Authorization
+(prior auth requirements for planned services; list what needs PA and what doesn't)
+
+## ICD-10 Code Optimization
+(highest-specificity codes for this diagnosis combination to maximize reimbursement; list code + description)
+
+## CPT Bundling Strategy
+(bundling opportunities; CCI edit conflicts to avoid; modifier recommendations with rationale)
+
+## Medical Necessity Documentation
+(exact documentation language needed to support the visit level billed)
+
+## Denial Prevention
+(top 3 common denial reasons for this payer + diagnosis; specific prevention strategies)
+
+## Expected Reimbursement Breakdown
+(estimated $ by CPT code; contractual vs. expected rate; total encounter value)
+
+## Appeal Strategy
+(if denied: grounds for appeal, supporting literature, timelines)
+
+Be specific, payer-aware, and actionable.`,
       `Patient: ${patient.name}, Age: ${patient.age}
 Insurance: ${patient.insuranceProvider} ${patient.insurancePlan}
 Medical History: ${patient.medicalHistory.join(", ")}
@@ -96,11 +111,21 @@ Revenue/Visit: $${patient.revenuePerVisit} | Payment Reliability: ${patient.paym
         </div>
 
         {(output || loading) && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <pre className="whitespace-pre-wrap text-sm text-gray-300 font-sans leading-relaxed">
-              {output}
-              {loading && <span className="inline-block w-0.5 h-4 bg-teal-400 animate-pulse ml-0.5 align-middle" />}
-            </pre>
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-0">
+            {output.split("\n").map((line, i) => {
+              if (line.startsWith("## ")) {
+                return <h3 key={i} className="text-teal-400 font-semibold text-sm mt-4 mb-1.5 first:mt-0">{line.replace("## ", "")}</h3>;
+              }
+              if (line.startsWith("# ")) {
+                return <h2 key={i} className="text-white font-bold text-base mt-3 mb-2 first:mt-0">{line.replace("# ", "")}</h2>;
+              }
+              if (line.match(/^[\-\*] /)) {
+                return <p key={i} className="text-sm text-gray-300 leading-relaxed pl-3 flex gap-2"><span className="text-teal-500 flex-shrink-0">•</span><span>{line.replace(/^[\-\*] /, "")}</span></p>;
+              }
+              if (line.trim() === "") return <div key={i} className="h-1" />;
+              return <p key={i} className="text-sm text-gray-300 leading-relaxed">{line}</p>;
+            })}
+            {loading && <span className="inline-block w-0.5 h-4 bg-teal-400 animate-pulse ml-0.5 align-middle" />}
           </div>
         )}
       </div>

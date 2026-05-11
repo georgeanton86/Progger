@@ -1,11 +1,16 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 export function useStreamingAI() {
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const run = useCallback(async (prompt: string, context?: string) => {
+    // Abort any in-flight stream before starting a new one
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+
     setLoading(true);
     setOutput("");
 
@@ -14,6 +19,7 @@ export function useStreamingAI() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, context, stream: true }),
+        signal: abortRef.current.signal,
       });
 
       if (!res.body) throw new Error("No stream body");
@@ -44,14 +50,24 @@ export function useStreamingAI() {
           }
         }
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       setOutput("Error generating response. Please try again.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const reset = useCallback(() => setOutput(""), []);
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    setLoading(false);
+  }, []);
 
-  return { output, loading, run, reset, setOutput };
+  const reset = useCallback(() => {
+    abortRef.current?.abort();
+    setOutput("");
+    setLoading(false);
+  }, []);
+
+  return { output, loading, run, reset, cancel, setOutput };
 }
