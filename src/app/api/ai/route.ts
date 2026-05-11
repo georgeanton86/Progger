@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "edge";
+
 const systemPrompt = `You are PrognoSX, an elite AI predictive charting engine for licensed healthcare providers in California.
 
 Your mission: Before the patient walks in the door, build the ENTIRE visit. Given a chief complaint and patient history, you:
@@ -29,7 +31,7 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 16000,
+      max_tokens: 8000,
       stream: !!useStream,
       system: systemPrompt,
       messages: [{ role: "user", content: fullPrompt }],
