@@ -469,7 +469,11 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
           prompt: buildCarePlanPrompt(patient, appointment),
         }),
       });
-      if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(errData.error || `API ${res.status}`);
+      }
+      if (!res.body) throw new Error("No response body");
 
       // Accumulate the full SSE stream (faster than stream:false which holds entire
       // response in Vercel memory, often hitting the 60s serverless timeout)

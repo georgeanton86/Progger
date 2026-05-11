@@ -223,7 +223,11 @@ export default function DashboardPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ stream: true, prompt: buildCarePlanPrompt(patient, apt) }),
           });
-          if (!res.ok || !res.body) throw new Error("api");
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+            throw new Error(errData.error || `API ${res.status}`);
+          }
+          if (!res.body) throw new Error("No response body");
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
           let buf = "", text = "";
