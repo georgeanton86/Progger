@@ -311,17 +311,53 @@ function sanitizeJSONStrings(raw: string): string {
   let out = "";
   let inStr = false;
   let esc = false;
+  const VALID_ESC = new Set(['"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u']);
+
   for (let i = 0; i < raw.length; i++) {
     const c = raw[i];
+
     if (esc) { out += c; esc = false; continue; }
-    if (c === "\\" && inStr) { out += c; esc = true; continue; }
-    if (c === '"') { out += c; inStr = !inStr; continue; }
+
+    if (c === "\\" && inStr) {
+      const next = raw[i + 1] ?? "";
+      if (VALID_ESC.has(next)) {
+        out += c; esc = true;
+      } else {
+        out += "\\\\"; // bare backslash → escape it (e.g. \U becomes \\U)
+      }
+      continue;
+    }
+
+    if (c === '"') {
+      if (!inStr) {
+        inStr = true;
+        out += c;
+        continue;
+      }
+      // Decide: does this quote close the string, or is it an embedded literal?
+      // Peek at the next non-whitespace character. If it's a JSON structural
+      // character (, } ] :) or end of input, treat as closing quote.
+      // Anything else (a letter, digit, etc.) means the AI put a literal " in a
+      // string value — escape it instead of closing the string.
+      let j = i + 1;
+      while (j < raw.length && (raw[j] === ' ' || raw[j] === '\t')) j++;
+      const next = j < raw.length ? raw[j] : '';
+      if (next === ',' || next === '}' || next === ']' || next === ':' ||
+          next === '\n' || next === '\r' || next === '') {
+        inStr = false;
+        out += c;
+      } else {
+        out += '\\"'; // embedded quote → escape it
+      }
+      continue;
+    }
+
     if (inStr) {
       const code = c.charCodeAt(0);
-      if (code === 0x0a) { out += "\\n"; continue; }   // literal newline → \n
-      if (code === 0x0d) { out += "\\r"; continue; }   // carriage return → \r
-      if (code === 0x09) { out += "\\t"; continue; }   // literal tab → \t
-      if (code < 0x20) continue;                        // other control chars: strip
+      if (code === 0x0a) { out += "\\n"; continue; }
+      if (code === 0x0d) { out += "\\r"; continue; }
+      if (code === 0x09) { out += "\\t"; continue; }
+      if (code < 0x20) continue;
     }
     out += c;
   }
