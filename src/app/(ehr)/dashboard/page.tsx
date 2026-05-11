@@ -62,15 +62,7 @@ function getInitials(name: string) {
 }
 
 function DashboardHome({ onOpenEncounter }: { onOpenEncounter: (patient: Patient, apt: Appointment) => void }) {
-  const [now, setNow] = useState(new Date());
   const [healthCardPatient, setHealthCardPatient] = useState<Patient | null>(null);
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const stats = sampleStats;
 
   const sorted = [...sampleAppointments].sort((a, b) =>

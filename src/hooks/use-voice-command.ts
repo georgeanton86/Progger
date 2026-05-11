@@ -110,6 +110,7 @@ export function useVoiceCommand({ onCommand, enabled = true }: Options) {
 
     return () => {
       if (wakeTimeout) clearTimeout(wakeTimeout);
+      recognition.onend = null; // prevent auto-restart loop after cleanup
       try { recognition.stop(); } catch { /* already stopped */ }
     };
   }, [enabled, fire]);

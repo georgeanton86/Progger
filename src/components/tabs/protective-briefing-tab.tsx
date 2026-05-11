@@ -503,7 +503,7 @@ Value Score: ${patient.valueScore} | Payment Reliability: ${patient.paymentRelia
                   <div key={key} className="bg-gray-900 border border-gray-800 rounded-xl p-3">
                     <h4 className={cn("text-xs font-semibold mb-1.5", color)}>{label}</h4>
                     <ul className="space-y-1">
-                      {(parsed[key] as string[]).slice(0, 2).map((item, i) => (
+                      {((parsed[key] as string[] | undefined) ?? []).slice(0, 2).map((item, i) => (
                         <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5">
                           <span className={cn("flex-shrink-0 mt-0.5", color)}>•</span>
                           {item}
