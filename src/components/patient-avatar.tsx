@@ -3,7 +3,7 @@ import type { Patient } from "@/lib/types";
 
 // ── Condition → visual theme ─────────────────────────────────────────────────
 function conditionTheme(patient: Patient) {
-  const blob = [...patient.medicalHistory, patient.primaryComplaint ?? ""].join(" ").toLowerCase();
+  const blob = [...(patient.medicalHistory ?? []), patient.primaryComplaint ?? ""].join(" ").toLowerCase();
 
   if (blob.includes("chf") || blob.includes("systolic"))
     return { bg: "#DC2626", light: "#FEE2E2", badge: "❤️", label: "Cardiac Patient" };
@@ -67,7 +67,7 @@ export function PatientAvatar({ patient, size = 48 }: { patient: Patient; size?:
 export function PatientHealthCard({ patient, onClose }: { patient: Patient; onClose: () => void }) {
   const theme = conditionTheme(patient);
   const face = faceEmoji(patient);
-  const haAllergies = patient.allergies.filter(a => a !== "None");
+  const haAllergies = (patient.allergies ?? []).filter(a => a !== "None");
 
   return (
     <div

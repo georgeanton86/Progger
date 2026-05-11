@@ -108,7 +108,7 @@ export function PreVisitTab() {
                 {patient.medications.map(m => (
                   <span key={m} className="text-xs px-2 py-0.5 bg-teal-900/20 text-teal-400 border border-teal-800/30 rounded">{m}</span>
                 ))}
-                {patient.allergies.filter(a => a !== "None").map(a => (
+                {(patient.allergies ?? []).filter(a => a !== "None").map(a => (
                   <span key={a} className="text-xs px-2 py-0.5 bg-red-900/20 text-red-400 border border-red-800/30 rounded">⚠ {a}</span>
                 ))}
               </div>

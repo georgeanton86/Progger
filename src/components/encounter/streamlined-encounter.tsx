@@ -569,7 +569,7 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
     },
   });
 
-  const criticalFlags = carePlan?.liabilityFlags.filter(f => f.severity === "critical") ?? [];
+  const criticalFlags = (carePlan?.liabilityFlags ?? []).filter(f => f.severity === "critical");
   const allAccepted = carePlan ? Object.values(statuses).every(s => s !== "rejected") : false;
   const totalRevenue = carePlan ? (carePlan.billing.totalBillable + carePlan.upsells.filter((_, i) => statuses[`upsell-${i}`] !== "rejected").reduce((s, u) => s + u.revenue, 0)) : 0;
 
@@ -796,8 +796,8 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
           <div>
             <p className="text-xs font-bold text-red-400 uppercase tracking-wider mb-1.5">⚠ Allergies</p>
             <div className="flex flex-wrap gap-1">
-              {patient.allergies.filter(a => a !== "None").length > 0
-                ? patient.allergies.filter(a => a !== "None").map(a => <span key={a} className="text-xs px-2 py-0.5 bg-red-900/30 text-red-400 border border-red-700/40 rounded-full">{a}</span>)
+              {(patient.allergies ?? []).filter(a => a !== "None").length > 0
+                ? (patient.allergies ?? []).filter(a => a !== "None").map(a => <span key={a} className="text-xs px-2 py-0.5 bg-red-900/30 text-red-400 border border-red-700/40 rounded-full">{a}</span>)
                 : <span className="text-xs text-gray-500">NKDA</span>}
             </div>
           </div>

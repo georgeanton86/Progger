@@ -107,7 +107,7 @@ function DashboardHome({ onOpenEncounter, pregenStatus }: { onOpenEncounter: (pa
             const patient = samplePatients.find(p => p.id === apt.patientId)!;
             if (!patient) return null;
             const time = new Date(apt.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-            const hasScopeWarning = patient.noShowRate > 10 || patient.medicalHistory.some(h => h.toLowerCase().includes("copd"));
+            const hasScopeWarning = patient.noShowRate > 10 || (patient.medicalHistory ?? []).some(h => h.toLowerCase().includes("copd"));
             return (
               <div
                 key={apt.id}
@@ -183,8 +183,8 @@ function DashboardHome({ onOpenEncounter, pregenStatus }: { onOpenEncounter: (pa
                   <li className="flex items-start gap-2"><span className="text-teal-400 mt-0.5">•</span> Patient has {patient.paymentReliability}% payment reliability — reliable financial profile.</li>
                   <li className="flex items-start gap-2"><span className="text-teal-400 mt-0.5">•</span> Insurance: {patient.insuranceProvider} {patient.insurancePlan} — verify coverage before visit.</li>
                   <li className="flex items-start gap-2"><span className="text-teal-400 mt-0.5">•</span> Review medications: {patient.medications.slice(0, 2).join(", ")}{patient.medications.length > 2 ? ` +${patient.medications.length - 2} more` : ""}.</li>
-                  {patient.allergies.filter(a => a !== "None").length > 0 && (
-                    <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">•</span> Allergy alert: {patient.allergies.filter(a => a !== "None").join(", ")}.</li>
+                  {(patient.allergies ?? []).filter(a => a !== "None").length > 0 && (
+                    <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">•</span> Allergy alert: {(patient.allergies ?? []).filter(a => a !== "None").join(", ")}.</li>
                   )}
                 </ul>
               </div>
