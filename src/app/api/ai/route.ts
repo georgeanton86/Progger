@@ -39,7 +39,8 @@ export async function POST(req: NextRequest) {
   });
 
   if (!response.ok) {
-    return NextResponse.json({ error: `AI request failed: ${response.status}` }, { status: 500 });
+    const errBody = await response.text().catch(() => "");
+    return NextResponse.json({ error: `AI ${response.status}: ${errBody.slice(0, 300)}` }, { status: 500 });
   }
 
   if (useStream) {
