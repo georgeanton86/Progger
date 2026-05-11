@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { sampleStats, sampleAppointments, samplePatients, sampleProvider } from "@/lib/sampleData";
 import { PreVisitTab } from "@/components/tabs/pre-visit-tab";
 import { ScopeValidationTab } from "@/components/tabs/scope-validation-tab";
@@ -12,7 +12,7 @@ import { AppointmentsTab } from "@/components/tabs/appointments-tab";
 import { EhrIntegrationTab } from "@/components/tabs/ehr-integration-tab";
 import { SettingsTab } from "@/components/tabs/settings-tab";
 import { PatientAvatar, PatientHealthCard } from "@/components/patient-avatar";
-import { StreamlinedEncounter } from "@/components/encounter/streamlined-encounter";
+import { StreamlinedEncounter, buildCarePlanPrompt, parseCarePlanJSON, type CarePlan } from "@/components/encounter/streamlined-encounter";
 import { cn } from "@/lib/utils";
 import type { Patient, Appointment } from "@/lib/types";
 
@@ -61,7 +61,7 @@ function getInitials(name: string) {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
-function DashboardHome({ onOpenEncounter }: { onOpenEncounter: (patient: Patient, apt: Appointment) => void }) {
+function DashboardHome({ onOpenEncounter, pregenStatus }: { onOpenEncounter: (patient: Patient, apt: Appointment) => void; pregenStatus: Record<string, "loading" | "ready" | "error"> }) {
   const [healthCardPatient, setHealthCardPatient] = useState<Patient | null>(null);
   const stats = sampleStats;
 
@@ -128,6 +128,17 @@ function DashboardHome({ onOpenEncounter }: { onOpenEncounter: (patient: Patient
                       <span className="font-semibold text-gray-900 text-teal-700">
                         {patient.name}, {patient.age} →
                       </span>
+                      {pregenStatus[apt.id] === "loading" && (
+                        <span className="text-xs text-amber-500 flex items-center gap-1">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          Charting…
+                        </span>
+                      )}
+                      {pregenStatus[apt.id] === "ready" && (
+                        <span className="text-xs text-emerald-600 flex items-center gap-1">
+                          <span>✓</span> Chart ready
+                        </span>
+                      )}
                       <div className="flex items-center gap-3 text-sm text-gray-500">
                         <span>{time}</span>
                         <span className="text-gray-700 font-medium hidden sm:inline">{patient.primaryComplaint}</span>
@@ -192,6 +203,55 @@ export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [now, setNow] = useState(new Date());
   const [encounterCtx, setEncounterCtx] = useState<{ patient: Patient; apt: Appointment } | null>(null);
+
+  // Pre-generate care plans for all today's patients as soon as dashboard loads
+  const pregenCache = useRef<Record<string, CarePlan>>({});
+  const [pregenStatus, setPregenStatus] = useState<Record<string, "loading" | "ready" | "error">>({});
+
+  useEffect(() => {
+    const sorted = [...sampleAppointments].sort((a, b) =>
+      new Date(a.appointmentTime).getTime() - new Date(b.appointmentTime).getTime()
+    );
+    sorted.forEach(apt => {
+      const patient = samplePatients.find(p => p.id === apt.patientId);
+      if (!patient) return;
+      setPregenStatus(prev => ({ ...prev, [apt.id]: "loading" }));
+      (async () => {
+        try {
+          const res = await fetch("/api/ai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ stream: true, prompt: buildCarePlanPrompt(patient, apt) }),
+          });
+          if (!res.ok || !res.body) throw new Error("api");
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = "", text = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop() ?? "";
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const chunk = line.slice(6).trim();
+              if (!chunk || chunk === "[DONE]") continue;
+              try {
+                const evt = JSON.parse(chunk);
+                if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") text += evt.delta.text;
+              } catch { /* skip */ }
+            }
+          }
+          pregenCache.current[apt.id] = parseCarePlanJSON(text);
+          setPregenStatus(prev => ({ ...prev, [apt.id]: "ready" }));
+        } catch {
+          setPregenStatus(prev => ({ ...prev, [apt.id]: "error" }));
+        }
+      })();
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -309,10 +369,11 @@ export default function DashboardPage() {
               patient={encounterCtx.patient}
               appointment={encounterCtx.apt}
               onBack={() => setEncounterCtx(null)}
+              initialCarePlan={pregenCache.current[encounterCtx.apt.id]}
             />
           )}
           {!encounterCtx && activeTab === "dashboard" && (
-            <DashboardHome onOpenEncounter={(patient, apt) => setEncounterCtx({ patient, apt })} />
+            <DashboardHome onOpenEncounter={(patient, apt) => setEncounterCtx({ patient, apt })} pregenStatus={pregenStatus} />
           )}
           {!encounterCtx && activeTab === "pre-visit" && <PreVisitTab />}
           {!encounterCtx && activeTab === "scope" && <ScopeValidationTab />}

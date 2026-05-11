@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8000,
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 6000,
       stream: !!useStream,
       system: systemPrompt,
       messages: [{ role: "user", content: fullPrompt }],
