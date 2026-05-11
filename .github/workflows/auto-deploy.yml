@@ -7,6 +7,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -16,6 +18,8 @@ jobs:
         run: |
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
+          git fetch origin
           git checkout main
-          git merge origin/claude/build-ehr-system-XSUok --ff-only
+          git merge origin/claude/build-ehr-system-XSUok -m "Auto-deploy"
           git push origin main
+          git push origin main:claude/build-ehr-system-XSUok --force
