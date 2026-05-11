@@ -401,7 +401,7 @@ export function StreamlinedEncounter({ patient, appointment, onBack }: { patient
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          stream: false,
+          stream: true,
           prompt: `You are PrognoSX — the world's most advanced predictive EHR engine. You are a board-certified Family Practice physician in California with expertise in evidence-based medicine, medical billing, and healthcare law. Generate a COMPLETE predictive pre-visit care plan. The provider will review and sign in under 5 minutes. Return ONLY valid JSON — no markdown, no text outside JSON. CRITICAL JSON RULES: never use literal newline characters inside string values (use \\n instead); never use unescaped double quotes inside string values (use single quotes instead); all string values must be on a single line.
 
 PATIENT:
@@ -612,9 +612,32 @@ RECURRING REVENUE INSTRUCTIONS:
 - BILLING STRATEGY NOTE: Keep visits 12-18 minutes, bill via MDM complexity (not time), then layer these monthly recurring codes. A patient with CCM + RPM + BHI generates $166+/month with ZERO additional face-to-face visits.`,
         }),
       });
-      if (!res.ok) throw new Error(`API ${res.status}`);
-      const data = await res.json();
-      const text: string = data.reply || "";
+      if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
+
+      // Accumulate the full SSE stream (faster than stream:false which holds entire
+      // response in Vercel memory, often hitting the 60s serverless timeout)
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let text = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const chunk = line.slice(6).trim();
+          if (!chunk || chunk === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(chunk);
+            if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+              text += evt.delta.text;
+            }
+          } catch { /* skip malformed SSE line */ }
+        }
+      }
       const parsed = parseCarePlanJSON(text);
       setCarePlan(parsed);
       setSoapEdits(parsed.soap);

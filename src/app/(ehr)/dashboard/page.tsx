@@ -109,24 +109,25 @@ function DashboardHome({ onOpenEncounter }: { onOpenEncounter: (patient: Patient
             const time = new Date(apt.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
             const hasScopeWarning = patient.noShowRate > 10 || patient.medicalHistory.some(h => h.toLowerCase().includes("copd"));
             return (
-              <div key={apt.id} className="border border-gray-200 rounded-xl p-4">
+              <div
+                key={apt.id}
+                onClick={() => onOpenEncounter(patient, apt)}
+                className="border border-gray-200 rounded-xl p-4 cursor-pointer hover:border-teal-400 hover:shadow-md transition-all active:scale-[0.99]"
+              >
                 <div className="flex items-start gap-3">
-                  {/* Illustrated avatar — tap to open health card */}
-                  <button
-                    onClick={() => setHealthCardPatient(patient)}
+                  {/* Avatar — stops propagation to open health card instead */}
+                  <div
+                    onClick={e => { e.stopPropagation(); setHealthCardPatient(patient); }}
                     className="flex-shrink-0 hover:scale-105 transition-transform"
                     title={`View ${patient.name}'s health card`}
                   >
                     <PatientAvatar patient={patient} size={44} />
-                  </button>
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <button
-                        onClick={() => onOpenEncounter(patient, apt)}
-                        className="font-semibold text-gray-900 hover:text-teal-600 transition-colors text-left underline-offset-2 hover:underline"
-                      >
-                        {patient.name}, {patient.age}
-                      </button>
+                      <span className="font-semibold text-gray-900 text-teal-700">
+                        {patient.name}, {patient.age} →
+                      </span>
                       <div className="flex items-center gap-3 text-sm text-gray-500">
                         <span>{time}</span>
                         <span className="text-gray-700 font-medium hidden sm:inline">{patient.primaryComplaint}</span>
