@@ -304,26 +304,54 @@ function ConfirmModal({ carePlan, patient, onConfirm, onClose }: { carePlan: Car
   );
 }
 
-// Try to parse AI response JSON, repairing truncation if needed
+// Escape unescaped control characters (literal newlines, tabs, carriage returns)
+// inside JSON string values. This is the most common cause of "Expected ',' or '}'"
+// errors when an AI generates multi-line clinical text in JSON strings.
+function sanitizeJSONStrings(raw: string): string {
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (esc) { out += c; esc = false; continue; }
+    if (c === "\\" && inStr) { out += c; esc = true; continue; }
+    if (c === '"') { out += c; inStr = !inStr; continue; }
+    if (inStr) {
+      const code = c.charCodeAt(0);
+      if (code === 0x0a) { out += "\\n"; continue; }   // literal newline → \n
+      if (code === 0x0d) { out += "\\r"; continue; }   // carriage return → \r
+      if (code === 0x09) { out += "\\t"; continue; }   // literal tab → \t
+      if (code < 0x20) continue;                        // other control chars: strip
+    }
+    out += c;
+  }
+  return out;
+}
+
+// Try to parse AI response JSON, repairing both control-char corruption and truncation
 function parseCarePlanJSON(text: string): CarePlan {
   const start = text.indexOf("{");
   if (start === -1) throw new Error("No JSON in response");
-  const json = text.slice(start);
+  const raw = text.slice(start);
 
-  // Happy path — valid complete JSON
-  try { return JSON.parse(json) as CarePlan; } catch { /* repair */ }
+  // Pass 1: try as-is
+  try { return JSON.parse(raw) as CarePlan; } catch { /* repair */ }
 
-  // Walk the string tracking brace/bracket depth.
-  // Track the last position where depth dropped from ≥2 back to 1 — that means
-  // a top-level property value just finished. We can safely cut there and close
-  // the root object. This correctly handles mid-JSON truncation.
+  // Pass 2: sanitize unescaped control chars inside strings (fixes literal newlines
+  // in SOAP notes, clinical text, etc.) then try again
+  const sanitized = sanitizeJSONStrings(raw);
+  try { return JSON.parse(sanitized) as CarePlan; } catch { /* repair */ }
+
+  // Pass 3: handle truncation — walk sanitized string tracking brace depth.
+  // Track last position where depth dropped 2→1 (a top-level property just closed).
+  // Slicing there + appending "}" recovers truncated responses.
   let depth = 0;
   let inStr = false;
   let esc = false;
-  let lastCompleteAt1 = 0; // char index AFTER the last "}" or "]" that brought depth 2→1
+  let lastCompleteAt1 = 0;
 
-  for (let i = 0; i < json.length; i++) {
-    const c = json[i];
+  for (let i = 0; i < sanitized.length; i++) {
+    const c = sanitized[i];
     if (esc) { esc = false; continue; }
     if (c === "\\" && inStr) { esc = true; continue; }
     if (c === '"') { inStr = !inStr; continue; }
@@ -335,9 +363,8 @@ function parseCarePlanJSON(text: string): CarePlan {
     }
   }
 
-  // Slice to last complete top-level property value, then close root object
   if (lastCompleteAt1 > 0) {
-    try { return JSON.parse(json.slice(0, lastCompleteAt1) + "}") as CarePlan; } catch { /* continue */ }
+    try { return JSON.parse(sanitized.slice(0, lastCompleteAt1) + "}") as CarePlan; } catch { /* continue */ }
   }
 
   throw new Error("Could not parse AI response — please retry");
@@ -375,7 +402,7 @@ export function StreamlinedEncounter({ patient, appointment, onBack }: { patient
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           stream: false,
-          prompt: `You are PrognoSX — the world's most advanced predictive EHR engine. You are a board-certified Family Practice physician in California with expertise in evidence-based medicine, medical billing, and healthcare law. Generate a COMPLETE predictive pre-visit care plan. The provider will review and sign in under 5 minutes. Return ONLY valid JSON — no markdown, no text outside JSON.
+          prompt: `You are PrognoSX — the world's most advanced predictive EHR engine. You are a board-certified Family Practice physician in California with expertise in evidence-based medicine, medical billing, and healthcare law. Generate a COMPLETE predictive pre-visit care plan. The provider will review and sign in under 5 minutes. Return ONLY valid JSON — no markdown, no text outside JSON. CRITICAL JSON RULES: never use literal newline characters inside string values (use \\n instead); never use unescaped double quotes inside string values (use single quotes instead); all string values must be on a single line.
 
 PATIENT:
 Name: ${patient.name} | Age: ${patient.age} | DOB: ${patient.dateOfBirth}
