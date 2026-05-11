@@ -212,48 +212,64 @@ export default function DashboardPage() {
     const sorted = [...sampleAppointments].sort((a, b) =>
       new Date(a.appointmentTime).getTime() - new Date(b.appointmentTime).getTime()
     );
-    sorted.forEach(apt => {
-      const patient = samplePatients.find(p => p.id === apt.patientId);
-      if (!patient) return;
-      setPregenStatus(prev => ({ ...prev, [apt.id]: "loading" }));
-      (async () => {
+
+    async function fetchWithRetry(patient: Patient, apt: Appointment): Promise<string> {
+      let delay = 5000;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const res = await fetch("/api/ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stream: true, prompt: buildCarePlanPrompt(patient, apt) }),
+        });
+        if (res.status === 429) {
+          await new Promise(r => setTimeout(r, delay));
+          delay *= 2;
+          continue;
+        }
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+          throw new Error(errData.error || `API ${res.status}`);
+        }
+        if (!res.body) throw new Error("No response body");
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "", text = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const chunk = line.slice(6).trim();
+            if (!chunk || chunk === "[DONE]") continue;
+            try {
+              const evt = JSON.parse(chunk);
+              if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") text += evt.delta.text;
+            } catch { /* skip */ }
+          }
+        }
+        return text;
+      }
+      throw new Error("Rate limit — upgrade Anthropic plan at console.anthropic.com");
+    }
+
+    // Sequential to avoid rate limits
+    (async () => {
+      for (const apt of sorted) {
+        const patient = samplePatients.find(p => p.id === apt.patientId);
+        if (!patient) continue;
+        setPregenStatus(prev => ({ ...prev, [apt.id]: "loading" }));
         try {
-          const res = await fetch("/api/ai", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ stream: true, prompt: buildCarePlanPrompt(patient, apt) }),
-          });
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-            throw new Error(errData.error || `API ${res.status}`);
-          }
-          if (!res.body) throw new Error("No response body");
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buf = "", text = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const lines = buf.split("\n");
-            buf = lines.pop() ?? "";
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
-              const chunk = line.slice(6).trim();
-              if (!chunk || chunk === "[DONE]") continue;
-              try {
-                const evt = JSON.parse(chunk);
-                if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") text += evt.delta.text;
-              } catch { /* skip */ }
-            }
-          }
+          const text = await fetchWithRetry(patient, apt);
           pregenCache.current[apt.id] = parseCarePlanJSON(text);
           setPregenStatus(prev => ({ ...prev, [apt.id]: "ready" }));
         } catch {
           setPregenStatus(prev => ({ ...prev, [apt.id]: "error" }));
         }
-      })();
-    });
+      }
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
