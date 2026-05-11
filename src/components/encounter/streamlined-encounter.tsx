@@ -371,12 +371,12 @@ export function parseCarePlanJSON(text: string): CarePlan {
   const raw = text.slice(start);
 
   // Pass 1: try as-is
-  try { return JSON.parse(raw) as CarePlan; } catch { /* repair */ }
+  try { return withDefaults(JSON.parse(raw)); } catch { /* repair */ }
 
   // Pass 2: sanitize unescaped control chars inside strings (fixes literal newlines
   // in SOAP notes, clinical text, etc.) then try again
   const sanitized = sanitizeJSONStrings(raw);
-  try { return JSON.parse(sanitized) as CarePlan; } catch { /* repair */ }
+  try { return withDefaults(JSON.parse(sanitized)); } catch { /* repair */ }
 
   // Pass 3: handle truncation — walk sanitized string tracking brace depth.
   // Track last position where depth dropped 2→1 (a top-level property just closed).
@@ -400,11 +400,33 @@ export function parseCarePlanJSON(text: string): CarePlan {
   }
 
   if (lastCompleteAt1 > 0) {
-    try { return JSON.parse(sanitized.slice(0, lastCompleteAt1) + "}") as CarePlan; } catch { /* continue */ }
+    try { return withDefaults(JSON.parse(sanitized.slice(0, lastCompleteAt1) + "}")); } catch { /* continue */ }
   }
 
   throw new Error("Could not parse AI response — please retry");
 }
+
+function withDefaults(p: Partial<CarePlan>): CarePlan {
+  return {
+    predictiveAccuracy: p.predictiveAccuracy ?? 0,
+    assessment: p.assessment ?? { confidence: 0, primary: "Pending", secondaries: [], ruleOut: [], source: "" },
+    predictedExam: p.predictedExam ?? { expected: [], redFlags: [] },
+    diagnostics: p.diagnostics ?? { confidence: 0, items: [], source: "" },
+    treatmentPlan: p.treatmentPlan ?? { confidence: 0, items: [], source: "" },
+    patientEducation: p.patientEducation ?? { confidence: 0, items: [], source: "" },
+    followUp: p.followUp ?? { confidence: 0, items: [], source: "" },
+    ddx: p.ddx ?? [],
+    prescriptions: p.prescriptions ?? [],
+    soap: p.soap ?? { subjective: "", objective: "", assessment: "", plan: "" },
+    billing: p.billing ?? { emCode: "99213", emLevel: "Low MDM", mdm: { problems: "", data: "", risk: "", level: "" }, baseReimbursement: 0, addOnCodes: [], totalBillable: 0, modifiers: [], documentationRequired: [] },
+    upsells: p.upsells ?? [],
+    qualityMeasures: p.qualityMeasures ?? [],
+    liabilityFlags: p.liabilityFlags ?? [],
+    returnHooks: p.returnHooks ?? [],
+    recurringRevenue: p.recurringRevenue ?? { qualifies: false, codes: [], totalMonthly: 0, totalAnnual: 0, enrollmentNote: "" },
+  };
+}
+
 
 export function buildCarePlanPrompt(patient: Patient, appointment: Appointment): string {
   void appointment;
@@ -571,7 +593,7 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
 
   const criticalFlags = (carePlan?.liabilityFlags ?? []).filter(f => f.severity === "critical");
   const allAccepted = carePlan ? Object.values(statuses).every(s => s !== "rejected") : false;
-  const totalRevenue = carePlan ? (carePlan.billing.totalBillable + carePlan.upsells.filter((_, i) => statuses[`upsell-${i}`] !== "rejected").reduce((s, u) => s + u.revenue, 0)) : 0;
+  const totalRevenue = carePlan ? ((carePlan.billing?.totalBillable ?? 0) + (carePlan.upsells ?? []).filter((_, i) => statuses[`upsell-${i}`] !== "rejected").reduce((s, u) => s + u.revenue, 0)) : 0;
 
   return (
     <div className="flex flex-col h-full bg-gray-950">
