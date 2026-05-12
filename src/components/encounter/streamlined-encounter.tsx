@@ -136,6 +136,425 @@ export type CarePlan = {
   returnHooks: ReturnHook[];
 };
 
+// ── LEGAL SHIELD ─────────────────────────────────────────────────────────────
+
+type LegalShieldItem = {
+  dx: string;
+  severity: "emergent" | "urgent" | "high";
+  pitfall: string;
+  mandatoryTests: string[];
+  docPhrase: string;
+  score?: string;
+  malpracticeRisk: "critical" | "high" | "moderate";
+};
+
+function getLegalShield(cc: string): LegalShieldItem[] {
+  const c = cc.toLowerCase();
+  const items: LegalShieldItem[] = [];
+
+  if (c.includes("chest") || c.includes("palpitation") || c.includes("cardiac")) {
+    items.push(
+      { dx: "Acute Coronary Syndrome / STEMI", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "Atypical presentation in women, diabetics, elderly — jaw/arm/epigastric pain without classic CP",
+        mandatoryTests: ["EKG within 10 min of arrival", "Troponin ×2 (0h and 3h)", "CXR", "Aspirin 325mg if ACS suspected"],
+        docPhrase: "HEART score: _/10. EKG: ___. Troponin: ___. ACS ruled in/out by: ___.",
+        score: "HEART Score ≥4 → admit/expedite" },
+      { dx: "Pulmonary Embolism", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "Dyspnea attributed to anxiety; Wells criteria not applied; D-dimer not ordered",
+        mandatoryTests: ["Wells PE score", "D-dimer (if Wells <4)", "CT-PA (if Wells ≥4 or D-dimer elevated)"],
+        docPhrase: "Wells PE: _/12.5. D-dimer: ___. SpO2: ___. PE ruled out by: ___.",
+        score: "Wells ≥4 → CT-PA without D-dimer" },
+      { dx: "Aortic Dissection", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "15% have normal CXR; tearing/ripping quality of pain not elicited; BP differential not checked",
+        mandatoryTests: ["BP both arms (>20 mmHg diff suspicious)", "CXR", "ADD-RS score", "CT angio if ADD-RS ≥1"],
+        docPhrase: "Pain character: ___. BP right arm: ___ / left: ___. ADD-RS: _. Dissection ruled out by: ___.",
+        score: "ADD-RS ≥1 → CT Angiography" }
+    );
+  }
+
+  if ((c.includes("breath") || c.includes("dyspnea") || c.includes("sob")) && !c.includes("chest")) {
+    items.push(
+      { dx: "Pulmonary Embolism", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "Wells score not calculated; leg swelling/DVT symptoms not asked",
+        mandatoryTests: ["Wells PE score", "D-dimer or CT-PA"],
+        docPhrase: "Wells PE: _. Leg swelling/DVT symptoms: ___. PE workup: ___.",
+        score: "Wells ≥4 → CT-PA" },
+      { dx: "CHF / Acute Pulmonary Edema", severity: "urgent", malpracticeRisk: "high",
+        pitfall: "Treated as COPD exacerbation; BNP not ordered; prior EF not referenced",
+        mandatoryTests: ["BNP or NT-proBNP", "CXR", "EKG", "SpO2 trend"],
+        docPhrase: "BNP: ___. CXR: ___. Prior EF: ___. Prior CHF history: ___." }
+    );
+  }
+
+  if (c.includes("headache") || c.includes("head pain")) {
+    items.push(
+      { dx: "Subarachnoid Hemorrhage", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "Thunderclap onset not elicited; 'sentinel headache' dismissed as migraine; Ottawa rule not applied",
+        mandatoryTests: ["Ottawa SAH Rule applied", "Non-contrast CT head", "LP if CT negative + onset <6h or high suspicion"],
+        docPhrase: "Ottawa SAH Rule: ___. Pain onset: ___. 'Worst headache of life': yes/no. CT result: ___. LP: ___.",
+        score: "Ottawa SAH Rule — any positive → CT + LP" },
+      { dx: "Bacterial Meningitis", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "Classic triad absent in 50%; antibiotics delayed waiting for LP; Kernig/Brudzinski not documented",
+        mandatoryTests: ["LP (or start antibiotics if LP delayed >30 min)", "Blood cultures ×2", "Ceftriaxone 2g IV + dexamethasone"],
+        docPhrase: "Neck stiffness: ___. Kernig: ___. Brudzinski: ___. Jolt accentuation: ___. Antibiotics started at: ___." },
+      { dx: "Hypertensive Emergency", severity: "urgent", malpracticeRisk: "high",
+        pitfall: "BP not rechecked; end-organ damage (papilledema, neuro changes, AKI) not assessed",
+        mandatoryTests: ["BP ×2 both arms", "Funduscopic exam", "BMP (creatinine)", "EKG", "UA for proteinuria"],
+        docPhrase: "BP: ___. Funduscopy: ___. Neuro exam: ___. Creatinine: ___. End-organ damage: ___." }
+    );
+  }
+
+  if (c.includes("abdom") || c.includes("stomach") || c.includes("belly") || c.includes("nausea") || c.includes("vomit") || c.includes("rlq") || c.includes("llq")) {
+    items.push(
+      { dx: "Appendicitis", severity: "urgent", malpracticeRisk: "high",
+        pitfall: "Normal WBC in 1/3 of cases; retrocecal position = atypical location; perforation rate rises with delay",
+        mandatoryTests: ["Alvarado score", "CBC with diff", "CT abdomen/pelvis with contrast (Alvarado 4-6)", "Surgical consult (Alvarado ≥7)"],
+        docPhrase: "Alvarado score: _/10. RLQ tenderness: ___. Rebound/guarding: ___. Psoas/Rovsing sign: ___. CT or surgical plan: ___.",
+        score: "Alvarado ≥7 → surgical consult without CT" },
+      { dx: "Ectopic Pregnancy (reproductive-age female)", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "LMP not confirmed; prior US showing IUP falsely reassuring for heterotopic; hCG not ordered",
+        mandatoryTests: ["Urine hCG → quantitative serum if positive", "Transvaginal pelvic ultrasound", "OB/GYN consult if hCG positive without confirmed IUP"],
+        docPhrase: "LMP: ___. Urine hCG: ___. US IUP confirmed: yes/no. Ectopic excluded by: ___. OB consult at: ___." }
+    );
+  }
+
+  if (c.includes("back") || c.includes("lumbar") || c.includes("spine")) {
+    items.push(
+      { dx: "Cauda Equina Syndrome", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "Saddle anesthesia and urinary retention not specifically asked; MRI delayed or not ordered",
+        mandatoryTests: ["Specifically ask: saddle anesthesia, urinary retention, bowel incontinence", "Post-void residual (bladder scan)", "MRI lumbar spine STAT", "Neurosurgery consult"],
+        docPhrase: "Saddle anesthesia: yes/no. Urinary retention: yes/no. Bowel incontinence: yes/no. MRI ordered at: ___. Neuro consult: ___." },
+      { dx: "Aortic Aneurysm Rupture (age >60)", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "Pulsatile abdominal mass not palpated; back/flank pain in elderly attributed to musculoskeletal",
+        mandatoryTests: ["Bedside abdominal ultrasound (AAA screening)", "BP both arms", "STAT CT if AAA >5cm or unstable"],
+        docPhrase: "Pulsatile abdominal mass: ___. Bedside US: ___. BP: ___. Age + cardiovascular risk factors documented." }
+    );
+  }
+
+  if (c.includes("fever") || c.includes("febrile")) {
+    items.push(
+      { dx: "Sepsis / Septic Shock", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "qSOFA not calculated; lactate not ordered; antibiotics delayed >1 hour from recognition",
+        mandatoryTests: ["qSOFA score (RR≥22, AMS, SBP≤100)", "Blood cultures ×2 before antibiotics", "Lactate", "Broad-spectrum antibiotics within 1 hour"],
+        docPhrase: "qSOFA: _/3. Lactate: ___. Source: ___. Blood cultures at: ___. Antibiotics started at: ___ (≤1h from recognition).",
+        score: "qSOFA ≥2 = high-risk sepsis — treat as sepsis" },
+      { dx: "Bacterial Meningitis", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "Antibiotics delayed for LP; no LP performed; Kernig/Brudzinski not documented",
+        mandatoryTests: ["LP or empiric antibiotics if LP delayed", "Blood cultures ×2", "CBC/CMP", "Ceftriaxone 2g IV + dexamethasone"],
+        docPhrase: "Kernig: ___. Brudzinski: ___. LP: ___. If LP delayed, antibiotics at: ___." }
+    );
+  }
+
+  if (c.includes("leg") || c.includes("calf") || c.includes("swelling") || c.includes("dvt")) {
+    items.push(
+      { dx: "DVT → Pulmonary Embolism", severity: "urgent", malpracticeRisk: "high",
+        pitfall: "Wells DVT score not applied; compression ultrasound not ordered; bilateral assessment skipped",
+        mandatoryTests: ["Wells DVT score", "D-dimer (if Wells <2)", "Venous duplex ultrasound"],
+        docPhrase: "Wells DVT: _/8. D-dimer: ___. Duplex US: ___. Anticoagulation plan: ___.",
+        score: "Wells DVT ≥2 → ultrasound regardless of D-dimer" },
+      { dx: "Necrotizing Fasciitis", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "Appears as cellulitis early; crepitus not palpated; pain out of proportion to exam ignored",
+        mandatoryTests: ["LRINEC score", "Soft tissue X-ray (gas in tissues)", "CT with contrast", "Surgical consult — clinical diagnosis"],
+        docPhrase: "LRINEC score: ___. Crepitus: ___. Pain out of proportion: ___. Surgical consult: ___.",
+        score: "LRINEC ≥6 = high risk necrotizing fasciitis" }
+    );
+  }
+
+  if (c.includes("dizz") || c.includes("syncope") || c.includes("vertigo") || c.includes("faint")) {
+    items.push(
+      { dx: "Posterior Stroke / Cerebellar Stroke", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "HINTS exam not performed; posterior fossa stroke missed on CT (requires MRI); thrombolytics window missed",
+        mandatoryTests: ["HINTS exam (Head-Impulse, Nystagmus, Test-of-Skew)", "NIHSS score", "Non-contrast CT head", "MRI-DWI if HINTS abnormal", "Neurology consult"],
+        docPhrase: "HINTS: HI ___, Nystagmus ___, Skew ___. NIHSS: ___. Last known well: ___. CT result: ___. Neuro at: ___.",
+        score: "HINTS more sensitive than CT for posterior stroke" },
+      { dx: "Cardiac Syncope (arrhythmia / structural)", severity: "urgent", malpracticeRisk: "high",
+        pitfall: "Syncope labeled vasovagal without EKG; Brugada/long QT pattern missed; no orthostatics",
+        mandatoryTests: ["12-lead EKG", "Orthostatic BP measurements", "Holter monitor if recurrent", "Echo if structural suspected"],
+        docPhrase: "EKG result: ___. Orthostatics: ___. Prodrome (nausea/diaphoresis vs. palpitations): ___. Cardiac vs. vasovagal criteria: ___." }
+    );
+  }
+
+  if (c.includes("throat") || c.includes("sore")) {
+    items.push(
+      { dx: "Peritonsillar Abscess / Deep Space Neck Infection", severity: "urgent", malpracticeRisk: "high",
+        pitfall: "Treated as viral pharyngitis; uvular deviation and trismus not assessed; airway risk missed",
+        mandatoryTests: ["Uvular deviation assessment", "Trismus: can patient open mouth >3cm?", "CT neck if deep space infection suspected", "ENT consult if PTA suspected"],
+        docPhrase: "Uvular deviation: ___. Trismus: ___. Drooling/muffled voice: ___. ENT consulted: ___." },
+      { dx: "Epiglottitis (increasingly common in adults)", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "Adult epiglottitis dismissed as pharyngitis; drooling/tripod position missed; airway not secured",
+        mandatoryTests: ["Lateral neck soft tissue X-ray (thumbprint sign)", "ENT/anesthesia at bedside — do NOT agitate", "Anticipate airway"],
+        docPhrase: "Drooling: ___. Tripod position: ___. Lateral neck X-ray: ___. Airway plan: ___. ENT at: ___." }
+    );
+  }
+
+  if (c.includes("scrotal") || c.includes("testicle") || c.includes("testicular")) {
+    items.push(
+      { dx: "Testicular Torsion", severity: "emergent", malpracticeRisk: "critical",
+        pitfall: "6-hour salvage window missed; doppler ordered but surgical consult delayed; epididymitis assumed without imaging",
+        mandatoryTests: ["Scrotal Doppler ultrasound STAT", "Urology consult simultaneously (not after US)", "Manual detorsion attempt if delay anticipated"],
+        docPhrase: "Pain onset: ___. Scrotal Doppler: ___. Urology consulted at: ___. Manual detorsion attempted: ___." }
+    );
+  }
+
+  return items.slice(0, 4);
+}
+
+function LegalShieldSection({ chiefComplaint }: { chiefComplaint: string }) {
+  const items = getLegalShield(chiefComplaint);
+  const [expanded, setExpanded] = useState<number | null>(null);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-red-800/60 overflow-hidden">
+      <div className="px-4 py-3 bg-red-950/40 border-b border-red-800/40 flex items-center justify-between">
+        <div>
+          <span className="font-bold text-red-300 text-sm">⚖ Legal Shield — Must-Not-Miss</span>
+          <span className="text-xs text-red-400/60 ml-2">Primary care malpractice defense</span>
+        </div>
+        <span className="text-xs text-gray-600">CRICO/RMF · The Doctors Company</span>
+      </div>
+      <div className="p-3 space-y-2 bg-gray-950/50">
+        {items.map((item, i) => {
+          const isOpen = expanded === i;
+          const borderColor = item.malpracticeRisk === "critical" ? "border-red-700/50" : item.malpracticeRisk === "high" ? "border-amber-700/40" : "border-gray-700/40";
+          const bgColor = item.malpracticeRisk === "critical" ? "bg-red-950/20" : item.malpracticeRisk === "high" ? "bg-amber-950/10" : "bg-gray-900/30";
+          const badgeColor = item.malpracticeRisk === "critical" ? "bg-red-900/50 text-red-400" : item.malpracticeRisk === "high" ? "bg-amber-900/40 text-amber-400" : "bg-gray-700 text-gray-400";
+          return (
+            <div key={i} className={cn("rounded-xl border transition-all", borderColor, bgColor)}>
+              <button
+                className="w-full flex items-center gap-3 p-3 text-left"
+                onClick={() => setExpanded(isOpen ? null : i)}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-white text-sm">{item.dx}</p>
+                    <span className={cn("text-xs px-2 py-0.5 rounded-full font-bold", badgeColor)}>
+                      {item.severity.toUpperCase()}
+                    </span>
+                    {item.score && <span className="text-xs text-blue-400 hidden sm:inline">📊 {item.score}</span>}
+                  </div>
+                  <p className="text-xs text-red-300/70 mt-0.5">⚠ Common miss: {item.pitfall}</p>
+                </div>
+                <span className="text-gray-500 text-xs flex-shrink-0">{isOpen ? "▲" : "▼"}</span>
+              </button>
+              {isOpen && (
+                <div className="px-3 pb-3 space-y-2">
+                  <div>
+                    <p className="text-xs font-bold text-gray-400 mb-1">Mandatory Tests / Actions:</p>
+                    <ul className="space-y-0.5">
+                      {item.mandatoryTests.map((t, j) => (
+                        <li key={j} className="text-xs text-gray-300 flex items-start gap-1.5">
+                          <span className="text-teal-500 mt-0.5 flex-shrink-0">•</span>{t}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="px-3 py-2 bg-gray-800/60 rounded-lg border border-gray-700/40">
+                    <p className="text-xs font-bold text-gray-500 mb-0.5">Chart documentation required (copy into SOAP):</p>
+                    <p className="text-xs text-gray-300 italic">{item.docPhrase}</p>
+                  </div>
+                  {item.score && (
+                    <div className="px-2.5 py-1.5 bg-blue-900/20 border border-blue-700/30 rounded-lg">
+                      <p className="text-xs text-blue-300">📊 Decision Rule: {item.score}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="px-4 py-2 bg-gray-900/20 border-t border-gray-800/60">
+        <p className="text-xs text-gray-600">Documenting these rule-outs elevates MDM complexity → supports a higher E&M code.</p>
+      </div>
+    </div>
+  );
+}
+
+// ── PRINTABLE VISIT SUMMARY ───────────────────────────────────────────────────
+
+function PrintableVisitSummary({ carePlan, patient, appointment, soapNote, onClose }: {
+  carePlan: CarePlan;
+  patient: Patient;
+  appointment: Appointment;
+  soapNote: Partial<SOAPNote>;
+  onClose: () => void;
+}) {
+  const aptDate = new Date(appointment.appointmentTime).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const aptTime = new Date(appointment.appointmentTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div id="visit-summary-print-root" className="fixed inset-0 bg-white z-50 overflow-auto">
+      <style>{`
+        @media print {
+          body > *:not(#visit-summary-print-root) { display: none !important; }
+          #visit-summary-print-root { display: block !important; position: fixed; top: 0; left: 0; width: 100%; background: white; }
+          .no-print { display: none !important; }
+          .page-break { page-break-before: always; }
+        }
+      `}</style>
+
+      {/* Controls bar */}
+      <div className="no-print flex items-center justify-between px-5 py-3 bg-gray-100 border-b sticky top-0 z-10">
+        <button onClick={onClose} className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1.5">
+          ← Back to Encounter
+        </button>
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg"
+        >
+          🖨 Print / Save PDF
+        </button>
+      </div>
+
+      {/* Printable content */}
+      <div className="max-w-4xl mx-auto p-8 text-gray-900">
+        {/* Header */}
+        <div className="flex items-start justify-between pb-5 border-b-2 border-gray-200 mb-6">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold px-2.5 py-1 rounded bg-blue-100 text-blue-700 uppercase tracking-widest">Visit Summary</span>
+              <span className="text-xs text-gray-500">{aptDate} · {aptTime}</span>
+            </div>
+            <h1 className="text-3xl font-extrabold text-gray-900">{patient.name}</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              Age {patient.age} · DOB: {patient.dateOfBirth}
+              {patient.insuranceProvider && ` · ${patient.insuranceProvider} ${patient.insurancePlan ?? ""}`}
+            </p>
+            <p className="font-semibold text-gray-700 mt-1">Chief Complaint: {patient.primaryComplaint}</p>
+          </div>
+          <div className="text-right">
+            <p className="font-extrabold text-gray-900">PredictaChart<sup className="text-xs">™</sup></p>
+            <p className="text-xs text-gray-400 mt-1">Arogya Medical</p>
+            <div className="mt-2 text-xs text-gray-500">
+              <p>{carePlan.billing.emCode} · {carePlan.billing.emLevel}</p>
+              <p className="font-semibold text-green-700">${carePlan.billing.totalBillable} billable</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Assessment */}
+        <section className="mb-5">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Assessment</h2>
+          <p className="font-bold text-gray-900">{carePlan.assessment.primary}</p>
+          {carePlan.assessment.secondaries.length > 0 && (
+            <p className="text-sm text-gray-600 mt-0.5">Additional: {carePlan.assessment.secondaries.join(" · ")}</p>
+          )}
+          {carePlan.assessment.ruleOut.length > 0 && (
+            <p className="text-sm text-gray-500 mt-0.5">Ruled out: {carePlan.assessment.ruleOut.join(", ")}</p>
+          )}
+        </section>
+
+        {/* SOAP Note */}
+        <section className="mb-5">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">SOAP Note</h2>
+          {(["subjective", "objective", "assessment", "plan"] as const).map(field => (
+            <div key={field} className="mb-2">
+              <p className="text-xs font-bold uppercase text-gray-500">{field}</p>
+              <p className="text-sm text-gray-800 leading-relaxed">{(soapNote[field] ?? carePlan.soap[field]) || "—"}</p>
+            </div>
+          ))}
+        </section>
+
+        {/* Treatment Plan + Prescriptions */}
+        <div className="grid grid-cols-2 gap-6 mb-5">
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Treatment Plan</h2>
+            <ul className="space-y-1">
+              {(carePlan.treatmentPlan.items ?? []).map((t, i) => (
+                <li key={i} className="text-sm text-gray-800 flex items-start gap-1.5">
+                  <span className="text-gray-400 mt-0.5">{i + 1}.</span>{t}
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Prescriptions</h2>
+            {carePlan.prescriptions.length > 0
+              ? carePlan.prescriptions.map((rx, i) => (
+                <div key={i} className="text-sm text-gray-800 mb-1">
+                  <span className="font-semibold">{rx.name} {rx.dosing}</span>
+                  <span className="text-gray-500"> · {rx.route} · {rx.duration}</span>
+                  {rx.controlled && <span className="text-red-600 ml-1 font-bold text-xs">CONTROLLED</span>}
+                </div>
+              ))
+              : <p className="text-sm text-gray-500">No prescriptions this visit</p>
+            }
+          </section>
+        </div>
+
+        {/* Diagnostics + Follow-up */}
+        <div className="grid grid-cols-2 gap-6 mb-5">
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Diagnostic Orders</h2>
+            <ul className="space-y-1">
+              {(carePlan.diagnostics.items ?? []).map((d, i) => (
+                <li key={i} className="text-sm text-gray-800 flex items-start gap-1.5">
+                  <span className="text-teal-600 mt-0.5">🧪</span>{d}
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Follow-up Plan</h2>
+            <ul className="space-y-1">
+              {(carePlan.followUp.items ?? []).map((f, i) => (
+                <li key={i} className="text-sm text-gray-800 flex items-start gap-1.5">
+                  <span className="text-blue-500 mt-0.5">📅</span>{f}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+
+        {/* Patient Education */}
+        <section className="mb-5">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Patient Education</h2>
+          <ul className="space-y-1">
+            {(carePlan.patientEducation.items ?? []).map((e, i) => (
+              <li key={i} className="text-sm text-gray-800 flex items-start gap-1.5">
+                <span className="text-purple-500 mt-0.5">•</span>{e}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Billing */}
+        <section className="mb-5 p-4 bg-gray-50 rounded-xl border border-gray-200">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Billing Summary</h2>
+          <div className="flex items-center gap-6">
+            <div>
+              <p className="text-2xl font-extrabold text-gray-900">{carePlan.billing.emCode}</p>
+              <p className="text-xs text-gray-500">{carePlan.billing.emLevel}</p>
+            </div>
+            <div className="text-sm text-gray-700 space-y-0.5">
+              <p>Problems: {carePlan.billing.mdm.problems}</p>
+              <p>Data: {carePlan.billing.mdm.data}</p>
+              <p>Risk: {carePlan.billing.mdm.risk}</p>
+            </div>
+            <div className="ml-auto text-right">
+              <p className="text-xl font-extrabold text-green-700">${carePlan.billing.totalBillable}</p>
+              <p className="text-xs text-gray-500">Total billable</p>
+            </div>
+          </div>
+          {carePlan.billing.documentationRequired.length > 0 && (
+            <div className="mt-2 text-xs text-gray-500">
+              Documentation: {carePlan.billing.documentationRequired.join(" · ")}
+            </div>
+          )}
+        </section>
+
+        {/* Footer */}
+        <div className="border-t border-gray-200 pt-4 flex items-center justify-between">
+          <p className="text-xs text-gray-400">This chart was generated by PredictaChart™ AI. Provider review and signature required. Not for direct patient distribution without provider approval.</p>
+          <p className="text-xs text-gray-300 flex-shrink-0 ml-4">PredictaChart™ · Arogya Medical</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Established patient time thresholds (CMS 2021, current 2025)
 const TIME_THRESHOLDS = [
   { code: "99211", min: 0,  max: 9,  label: "Minimal" },
@@ -614,6 +1033,7 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
   const [redAlertCleared, setRedAlertCleared] = useState(false);
   const [quickMode, setQuickMode] = useState(false);
   const [showAutoBook, setShowAutoBook] = useState(false);
+  const [showPrintSummary, setShowPrintSummary] = useState(false);
   const visitTimer = useTimer();
   const [preVisitMinutes] = useState(8); // pre-visit chart review time
   const totalEncounterMinutes = preVisitMinutes + visitTimer.totalMinutes;
@@ -813,6 +1233,17 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
         </div>
       )}
 
+      {/* Print visit summary overlay */}
+      {showPrintSummary && carePlan && (
+        <PrintableVisitSummary
+          carePlan={carePlan}
+          patient={patient}
+          appointment={appointment}
+          soapNote={soapEdits}
+          onClose={() => setShowPrintSummary(false)}
+        />
+      )}
+
       {/* Top bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-2.5 flex items-center justify-between flex-shrink-0 flex-wrap gap-2">
         <div className="flex items-center gap-3 min-w-0">
@@ -893,6 +1324,15 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
                 </span>
               )}
             </div>
+          )}
+          {carePlan && !generating && (
+            <button
+              onClick={() => setShowPrintSummary(true)}
+              className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-white text-xs font-bold transition-colors"
+              title="Print or save visit summary as PDF"
+            >
+              🖨 Print
+            </button>
           )}
           {!signed ? (
             <button
@@ -1150,6 +1590,9 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
                   </span>
                 </button>
               )}
+
+              {/* LEGAL SHIELD */}
+              <LegalShieldSection chiefComplaint={patient.primaryComplaint ?? ""} />
 
               {/* BILLING INTELLIGENCE */}
               <div className="bg-gray-900 border border-emerald-700/30 rounded-xl overflow-hidden">

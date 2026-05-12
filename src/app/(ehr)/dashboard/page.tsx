@@ -28,10 +28,10 @@ const tabs = [
   { id: "revenue", label: "Revenue Prediction", icon: "📈" },
   { id: "patients", label: "Patient Management", icon: "👥" },
   { id: "appointments", label: "Appointments", icon: "📅" },
-  { id: "lab-review", label: "Lab Review", icon: "🧪" },
   { id: "ehr", label: "EHR Integration", icon: "🔗" },
   { id: "settings", label: "Profile & Credentials", icon: "⚙️" },
 ];
+
 
 const specialties = [
   "Family Practice",
