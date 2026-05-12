@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
 import { samplePatients, sampleLabReviews } from "@/lib/sampleData";
+import { PatientAvatar } from "@/components/patient-avatar";
 import { cn } from "@/lib/utils";
-import type { LabResult, LabResultStatus, PatientLabReview } from "@/lib/types";
+import type { Patient, LabResult, LabResultStatus, PatientLabReview } from "@/lib/types";
 
 function statusStyle(s: LabResultStatus) {
   switch (s) {
@@ -47,7 +48,8 @@ function LabResultCard({ result }: { result: LabResult }) {
   );
 }
 
-function PrintableCard({ review, patientName, patientAge }: { review: PatientLabReview; patientName: string; patientAge: number }) {
+function PrintableCard({ review, patient }: { review: PatientLabReview; patient: Patient }) {
+  const { name: patientName, age: patientAge } = patient;
   return (
     <div id="lab-print-root" className="bg-white">
       <style>{`
@@ -77,19 +79,12 @@ function PrintableCard({ review, patientName, patientAge }: { review: PatientLab
               </div>
             )}
           </div>
-          {/* PredictaChart branding */}
-          <div className="flex-shrink-0 text-right">
-            <div className="w-16 h-16 rounded-2xl bg-white/15 flex items-center justify-center border border-white/20 mb-1">
-              <svg width="36" height="26" viewBox="0 0 36 26" fill="none">
-                <rect x="0" y="16" width="6" height="10" rx="2" fill="white" opacity="0.7"/>
-                <rect x="8" y="9" width="6" height="17" rx="2" fill="white" opacity="0.85"/>
-                <rect x="16" y="3" width="6" height="23" rx="2" fill="white"/>
-                <rect x="24" y="11" width="6" height="15" rx="2" fill="white" opacity="0.85"/>
-                <rect x="32" y="7" width="4" height="19" rx="2" fill="white" opacity="0.7"/>
-                <polyline points="3,16 11,9 19,3 27,11 34,7" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.4"/>
-              </svg>
+          {/* Patient avatar */}
+          <div className="flex-shrink-0 flex flex-col items-center gap-1.5">
+            <div className="rounded-2xl overflow-hidden border-4 border-white/30 shadow-xl">
+              <PatientAvatar patient={patient} size={80} />
             </div>
-            <p className="text-white text-xs font-bold">PredictaChart<sup>™</sup></p>
+            <p className="text-white/60 text-xs font-medium">PredictaChart™</p>
           </div>
         </div>
 
@@ -182,7 +177,7 @@ export function LabReviewTab() {
         </div>
         {/* Card */}
         <div className="flex-1 overflow-auto">
-          <PrintableCard review={review} patientName={patient.name} patientAge={patient.age} />
+          <PrintableCard review={review} patient={patient} />
         </div>
       </div>
     );

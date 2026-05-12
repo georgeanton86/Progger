@@ -293,8 +293,14 @@ function RedAlertModal({ flags, redFlags, onCleared, onClose }: {
     ...flags.map(f => ({ text: f.flag, sub: f.action })),
     ...redFlags.map(r => ({ text: r, sub: null })),
   ];
-  const [checked, setChecked] = useState<boolean[]>(() => Array(items.length).fill(false));
-  const allChecked = checked.every(Boolean);
+  type ItemState = "unchecked" | "absent" | "present";
+  const [states, setStates] = useState<ItemState[]>(() => Array(items.length).fill("unchecked"));
+  const allAddressed = states.every(s => s !== "unchecked");
+  const presentCount = states.filter(s => s === "present").length;
+
+  function mark(i: number, val: ItemState) {
+    setStates(prev => prev.map((s, j) => j === i ? (s === val ? "unchecked" : val) : s));
+  }
 
   return (
     <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -308,55 +314,109 @@ function RedAlertModal({ flags, redFlags, onCleared, onClose }: {
           <span className="text-2xl">🚨</span>
           <div>
             <h3 className="font-extrabold text-red-300 text-base leading-tight">Red Alert — Safety Clearance Required</h3>
-            <p className="text-red-400/70 text-xs mt-0.5">Provider must confirm each critical finding is absent</p>
+            <p className="text-red-400/70 text-xs mt-0.5">Confirm absent or document present &amp; escalate</p>
           </div>
           <button onClick={onClose} className="ml-auto w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/60 hover:bg-white/20 text-xs">✕</button>
         </div>
 
         {/* Checklist */}
-        <div className="px-5 py-4 space-y-2.5">
-          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Check each box to confirm NOT present in this patient:</p>
-          {items.map((item, i) => (
-            <button
-              key={i}
-              onClick={() => setChecked(prev => prev.map((v, j) => j === i ? !v : v))}
-              className={cn(
-                "w-full text-left flex items-start gap-3 p-3 rounded-xl border transition-all",
-                checked[i]
-                  ? "border-green-600/50 bg-green-900/15"
-                  : "border-red-700/30 bg-red-900/10 hover:border-red-600/50"
-              )}
-            >
-              <div className={cn(
-                "mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
-                checked[i] ? "border-green-500 bg-green-500" : "border-red-500/60"
-              )}>
-                {checked[i] && <span className="text-white text-xs font-bold">✓</span>}
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex items-center gap-4 mb-1">
+            <span className="text-xs text-gray-500 flex-1">Finding</span>
+            <span className="text-xs text-green-500 w-20 text-center">Not Present</span>
+            <span className="text-xs text-red-400 w-20 text-center">Present</span>
+          </div>
+          {items.map((item, i) => {
+            const s = states[i];
+            return (
+              <div
+                key={i}
+                className={cn(
+                  "p-3 rounded-xl border transition-all",
+                  s === "absent" ? "border-green-600/50 bg-green-900/10"
+                    : s === "present" ? "border-red-500/60 bg-red-950/30"
+                    : "border-red-700/30 bg-red-900/5"
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      "text-sm font-medium leading-snug",
+                      s === "absent" ? "text-green-300 line-through opacity-50"
+                        : s === "present" ? "text-red-300"
+                        : "text-red-200"
+                    )}>{item.text}</p>
+                    {s === "present" && item.sub && (
+                      <p className="text-xs text-amber-300 font-semibold mt-1">⚡ Action: {item.sub}</p>
+                    )}
+                    {s !== "present" && item.sub && (
+                      <p className="text-xs text-gray-600 mt-0.5">→ {item.sub}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {/* Not Present button */}
+                    <button
+                      onClick={() => mark(i, "absent")}
+                      className={cn(
+                        "w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all",
+                        s === "absent"
+                          ? "border-green-500 bg-green-500 text-white"
+                          : "border-gray-600 text-gray-600 hover:border-green-500/60"
+                      )}
+                      title="Confirm not present"
+                    >
+                      <span className="text-sm font-bold">✓</span>
+                    </button>
+                    {/* Present button */}
+                    <button
+                      onClick={() => mark(i, "present")}
+                      className={cn(
+                        "w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all",
+                        s === "present"
+                          ? "border-red-500 bg-red-600 text-white"
+                          : "border-gray-600 text-gray-600 hover:border-red-500/60"
+                      )}
+                      title="Finding is present — escalate"
+                    >
+                      <span className="text-sm font-bold">!</span>
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className={cn("text-sm font-medium leading-snug", checked[i] ? "text-green-300 line-through opacity-60" : "text-red-200")}>{item.text}</p>
-                {item.sub && <p className="text-xs text-gray-500 mt-0.5">→ {item.sub}</p>}
-              </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
 
         {/* Footer */}
         <div className="px-5 pb-5">
-          {!allChecked && (
-            <p className="text-center text-xs text-red-400/70 mb-3">{checked.filter(Boolean).length} of {items.length} confirmed — check all to continue</p>
+          {!allAddressed && (
+            <p className="text-center text-xs text-red-400/70 mb-3">
+              {states.filter(s => s !== "unchecked").length} of {items.length} addressed — mark each finding ✓ or !
+            </p>
+          )}
+          {presentCount > 0 && allAddressed && (
+            <div className="mb-3 p-3 rounded-xl bg-red-950/40 border border-red-700/40">
+              <p className="text-xs text-red-300 font-bold">⚠ {presentCount} finding{presentCount > 1 ? "s" : ""} marked PRESENT — escalation actions documented above</p>
+              <p className="text-xs text-gray-500 mt-1">Proceeding will log these as documented &amp; escalated in the chart</p>
+            </div>
           )}
           <button
-            disabled={!allChecked}
+            disabled={!allAddressed}
             onClick={onCleared}
             className={cn(
               "w-full py-3 rounded-xl font-bold text-sm transition-all",
-              allChecked
-                ? "bg-green-600 hover:bg-green-500 text-white"
-                : "bg-gray-800 text-gray-600 cursor-not-allowed"
+              !allAddressed
+                ? "bg-gray-800 text-gray-600 cursor-not-allowed"
+                : presentCount > 0
+                  ? "bg-amber-600 hover:bg-amber-500 text-white"
+                  : "bg-green-600 hover:bg-green-500 text-white"
             )}
           >
-            {allChecked ? "✓ Patient Cleared — No Red Flag Findings" : "Confirm All Findings Absent to Continue"}
+            {!allAddressed
+              ? "Address All Findings to Continue"
+              : presentCount > 0
+                ? `⚡ Proceed — ${presentCount} Finding${presentCount > 1 ? "s" : ""} Escalated & Documented`
+                : "✓ Patient Cleared — No Red Flag Findings"}
           </button>
         </div>
       </div>
@@ -1284,6 +1344,80 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
                 items={[carePlan.assessment.primary, ...carePlan.assessment.secondaries, ...carePlan.assessment.ruleOut.map(r => `Rule out: ${r}`)].filter(Boolean)}
               />
 
+              {/* DDX — right after assessment, with legal risk meter */}
+              {carePlan.ddx.length > 0 && (() => {
+                const sel = carePlan.ddx[selectedDDX ?? 0];
+                const riskScore = sel ? (sel.legalRisk === "low" ? 12 : sel.legalRisk === "medium" ? 48 : 85) : 0;
+                const riskColor = riskScore < 25 ? "bg-green-500" : riskScore < 60 ? "bg-amber-500" : "bg-red-500";
+                const riskLabel = riskScore < 25 ? "Low Liability" : riskScore < 60 ? "Moderate Liability" : "High Liability";
+                const riskText = sel?.legalRisk === "low"
+                  ? "Standard of care met. Diagnosis aligns with chief complaint and evidence base."
+                  : sel?.legalRisk === "medium"
+                  ? "Document your reasoning. Failure to work up this diagnosis could result in a missed diagnosis claim."
+                  : "High medicolegal exposure. If this diagnosis is missed, liability risk is significant. Document rule-out reasoning explicitly.";
+                return (
+                  <div className="rounded-2xl border border-amber-700/50 overflow-hidden">
+                    <div className="px-4 py-3 bg-amber-900/20 border-b border-amber-700/30 flex items-center justify-between">
+                      <span className="font-bold text-amber-300 text-sm">Differential Diagnosis (DDX)</span>
+                      <span className="text-xs text-amber-600">Tap to select alternative if needed</span>
+                    </div>
+                    <div className="p-3 space-y-2 bg-gray-900/30">
+                      {carePlan.ddx.map((d, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setSelectedDDX(i)}
+                          className={cn("w-full text-left p-3 rounded-xl border transition-all",
+                            selectedDDX === i
+                              ? "border-amber-500/60 bg-amber-900/15"
+                              : "border-gray-700/50 bg-gray-800/30 hover:border-gray-600"
+                          )}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <div className={cn("w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5",
+                              selectedDDX === i ? "border-amber-400 bg-amber-400" : "border-gray-600"
+                            )} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2 flex-wrap">
+                                <p className="font-bold text-white text-sm leading-snug">{d.diagnosis}</p>
+                                <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                                  {d.recommended && <span className="text-xs px-2 py-0.5 bg-amber-900/50 text-amber-300 rounded-full font-medium">Recommended</span>}
+                                  <span className="text-xs font-mono text-gray-400 bg-gray-700/60 px-1.5 py-0.5 rounded">{d.icd10}</span>
+                                  <span className="text-xs text-gray-300 font-semibold">{d.confidence}%</span>
+                                  <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium",
+                                    d.legalRisk === "low" ? "bg-green-900/40 text-green-400" :
+                                    d.legalRisk === "medium" ? "bg-amber-900/40 text-amber-400" :
+                                    "bg-red-900/40 text-red-400"
+                                  )}>
+                                    {d.legalRisk} risk
+                                  </span>
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-400 mt-1">{d.description}</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    {/* Legal risk meter for selected diagnosis */}
+                    {sel && (
+                      <div className="px-4 py-3 bg-gray-900/50 border-t border-gray-800/60">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs text-gray-500 font-medium">Legal Risk — Selected Diagnosis</span>
+                          <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
+                            riskScore < 25 ? "bg-green-900/40 text-green-400" :
+                            riskScore < 60 ? "bg-amber-900/40 text-amber-400" : "bg-red-900/40 text-red-400"
+                          )}>{riskLabel} · {riskScore}%</span>
+                        </div>
+                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden mb-2">
+                          <div className={cn("h-full rounded-full transition-all duration-500", riskColor)} style={{ width: `${riskScore}%` }} />
+                        </div>
+                        <p className="text-xs text-gray-500 leading-snug">{riskText}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* DIAGNOSTICS */}
               <SectionCard title="Diagnostics & Labs" confidence={carePlan.diagnostics.confidence} source={carePlan.diagnostics.source} status={statuses["diagnostics"] ?? "accepted"} onAccept={() => accept("diagnostics")} onReject={() => reject("diagnostics")} items={carePlan.diagnostics.items} />
 
@@ -1295,54 +1429,6 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
 
               {/* FOLLOW-UP */}
               <SectionCard title="Follow-up & Red Flags" confidence={carePlan.followUp.confidence} source={carePlan.followUp.source} status={statuses["followUp"] ?? "accepted"} onAccept={() => accept("followUp")} onReject={() => reject("followUp")} items={carePlan.followUp.items} />
-
-              {/* DDX — Replit-style radio cards */}
-              <div className="rounded-2xl border border-amber-700/50 overflow-hidden">
-                <div className="px-4 py-3 bg-amber-900/20 border-b border-amber-700/30 flex items-center justify-between">
-                  <span className="font-bold text-amber-300 text-sm">Differential Diagnosis Options (DDX)</span>
-                  <span className="text-xs text-amber-600">Select if rejecting primary</span>
-                </div>
-                <div className="px-3 py-1 bg-gray-900/40 border-b border-gray-800/60">
-                  <p className="text-xs text-gray-500 py-1.5">Primary diagnosis shown first. Tap to select alternative. Legal risk reflects standard of care liability.</p>
-                </div>
-                <div className="p-3 space-y-2 bg-gray-900/30">
-                  {carePlan.ddx.map((d, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setSelectedDDX(i)}
-                      className={cn("w-full text-left p-3 rounded-xl border transition-all",
-                        selectedDDX === i
-                          ? "border-amber-500/60 bg-amber-900/15"
-                          : "border-gray-700/50 bg-gray-800/30 hover:border-gray-600"
-                      )}
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <div className={cn("w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5",
-                          selectedDDX === i ? "border-amber-400 bg-amber-400" : "border-gray-600"
-                        )} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 flex-wrap">
-                            <p className="font-bold text-white text-sm leading-snug">{d.diagnosis}</p>
-                            <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
-                              {d.recommended && <span className="text-xs px-2 py-0.5 bg-amber-900/50 text-amber-300 rounded-full font-medium">Recommended</span>}
-                              <span className="text-xs font-mono text-gray-400 bg-gray-700/60 px-1.5 py-0.5 rounded">{d.icd10}</span>
-                              <span className="text-xs text-gray-300 font-semibold">{d.confidence}%</span>
-                              <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium",
-                                d.legalRisk === "low" ? "bg-green-900/40 text-green-400" :
-                                d.legalRisk === "medium" ? "bg-amber-900/40 text-amber-400" :
-                                "bg-red-900/40 text-red-400"
-                              )}>
-                                {d.legalRisk} legal risk
-                              </span>
-                            </div>
-                          </div>
-                          <p className="text-xs text-gray-400 mt-1">{d.description}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {/* PRESCRIPTION ORDERS */}
               {carePlan.prescriptions.length > 0 && (
