@@ -268,6 +268,87 @@ function LoadingScreen() {
   );
 }
 
+function RedAlertModal({ flags, redFlags, onCleared, onClose }: {
+  flags: LiabilityFlag[];
+  redFlags: string[];
+  onCleared: () => void;
+  onClose: () => void;
+}) {
+  const items = [
+    ...flags.map(f => ({ text: f.flag, sub: f.action })),
+    ...redFlags.map(r => ({ text: r, sub: null })),
+  ];
+  const [checked, setChecked] = useState<boolean[]>(() => Array(items.length).fill(false));
+  const allChecked = checked.every(Boolean);
+
+  return (
+    <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-gray-950 border border-red-600/60 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
+        style={{ maxHeight: "90vh", overflowY: "auto" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-red-950/60 border-b border-red-700/40 px-5 py-4 flex items-center gap-3">
+          <span className="text-2xl">🚨</span>
+          <div>
+            <h3 className="font-extrabold text-red-300 text-base leading-tight">Red Alert — Safety Clearance Required</h3>
+            <p className="text-red-400/70 text-xs mt-0.5">Provider must confirm each critical finding is absent</p>
+          </div>
+          <button onClick={onClose} className="ml-auto w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/60 hover:bg-white/20 text-xs">✕</button>
+        </div>
+
+        {/* Checklist */}
+        <div className="px-5 py-4 space-y-2.5">
+          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Check each box to confirm NOT present in this patient:</p>
+          {items.map((item, i) => (
+            <button
+              key={i}
+              onClick={() => setChecked(prev => prev.map((v, j) => j === i ? !v : v))}
+              className={cn(
+                "w-full text-left flex items-start gap-3 p-3 rounded-xl border transition-all",
+                checked[i]
+                  ? "border-green-600/50 bg-green-900/15"
+                  : "border-red-700/30 bg-red-900/10 hover:border-red-600/50"
+              )}
+            >
+              <div className={cn(
+                "mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
+                checked[i] ? "border-green-500 bg-green-500" : "border-red-500/60"
+              )}>
+                {checked[i] && <span className="text-white text-xs font-bold">✓</span>}
+              </div>
+              <div>
+                <p className={cn("text-sm font-medium leading-snug", checked[i] ? "text-green-300 line-through opacity-60" : "text-red-200")}>{item.text}</p>
+                {item.sub && <p className="text-xs text-gray-500 mt-0.5">→ {item.sub}</p>}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5">
+          {!allChecked && (
+            <p className="text-center text-xs text-red-400/70 mb-3">{checked.filter(Boolean).length} of {items.length} confirmed — check all to continue</p>
+          )}
+          <button
+            disabled={!allChecked}
+            onClick={onCleared}
+            className={cn(
+              "w-full py-3 rounded-xl font-bold text-sm transition-all",
+              allChecked
+                ? "bg-green-600 hover:bg-green-500 text-white"
+                : "bg-gray-800 text-gray-600 cursor-not-allowed"
+            )}
+          >
+            {allChecked ? "✓ Patient Cleared — No Red Flag Findings" : "Confirm All Findings Absent to Continue"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConfirmModal({ carePlan, patient, onConfirm, onClose }: { carePlan: CarePlan; patient: Patient; onConfirm: () => void; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
@@ -467,6 +548,8 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
   const [vitals, setVitals] = useState({ bp: "", hr: "", temp: "", spo2: "", wt: "" });
   const [signed, setSigned] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showRedAlert, setShowRedAlert] = useState(false);
+  const [redAlertCleared, setRedAlertCleared] = useState(false);
   const [quickMode, setQuickMode] = useState(false);
   const [showAutoBook, setShowAutoBook] = useState(false);
   const visitTimer = useTimer();
@@ -608,6 +691,16 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
             if (carePlan.returnHooks.length > 0) setShowAutoBook(true);
           }}
           onClose={() => setShowConfirm(false)}
+        />
+      )}
+
+      {/* Red Alert clearance modal */}
+      {showRedAlert && carePlan && (
+        <RedAlertModal
+          flags={carePlan.liabilityFlags}
+          redFlags={carePlan.predictedExam.redFlags}
+          onCleared={() => { setRedAlertCleared(true); setShowRedAlert(false); }}
+          onClose={() => setShowRedAlert(false)}
         />
       )}
 
@@ -957,28 +1050,32 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
 
           {carePlan && !generating && !quickMode && (
             <>
-              {/* CRITICAL LIABILITY FLAGS */}
-              {carePlan.liabilityFlags.length > 0 && (
-                <div className="bg-gray-900 border border-red-700/50 rounded-xl overflow-hidden">
-                  <div className="px-4 py-2.5 bg-red-900/15 border-b border-red-700/30 flex items-center gap-2">
-                    <span className="text-red-400 font-bold text-sm">⚠ Liability Flags — Review Before Signing</span>
+              {/* RED ALERT CLEARANCE BUTTON */}
+              {(carePlan.liabilityFlags.length > 0 || carePlan.predictedExam.redFlags.length > 0) && (
+                <button
+                  onClick={() => setShowRedAlert(true)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left",
+                    redAlertCleared
+                      ? "border-green-700/40 bg-green-900/10"
+                      : "border-red-600/50 bg-red-950/30 hover:border-red-500/70 hover:bg-red-950/50 animate-pulse"
+                  )}
+                >
+                  <span className="text-2xl flex-shrink-0">{redAlertCleared ? "✅" : "🚨"}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-sm font-bold", redAlertCleared ? "text-green-400" : "text-red-300")}>
+                      {redAlertCleared ? "Red Alert Cleared" : "Red Alert — Safety Check Required"}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {redAlertCleared
+                        ? `Provider confirmed absence of ${carePlan.liabilityFlags.length + carePlan.predictedExam.redFlags.length} critical findings`
+                        : `${carePlan.liabilityFlags.length + carePlan.predictedExam.redFlags.length} critical symptoms must be ruled out before signing`}
+                    </p>
                   </div>
-                  <div className="p-4 space-y-2">
-                    {carePlan.liabilityFlags.map((f, i) => (
-                      <div key={i} className={cn("p-3 rounded-lg border", f.severity === "critical" ? "bg-red-900/20 border-red-700/40" : "bg-amber-900/10 border-amber-700/30")}>
-                        <div className="flex gap-2 items-start">
-                          <span className={cn("text-xs font-bold px-2 py-0.5 rounded flex-shrink-0 mt-0.5", f.severity === "critical" ? "bg-red-900/50 text-red-300" : "bg-amber-900/50 text-amber-300")}>
-                            {f.severity.toUpperCase()}
-                          </span>
-                          <div>
-                            <p className="text-sm text-white font-medium">{f.flag}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">→ {f.action}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                  <span className={cn("text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0", redAlertCleared ? "bg-green-900/40 text-green-400" : "bg-red-900/40 text-red-400")}>
+                    {redAlertCleared ? "CLEARED" : "TAP TO VERIFY"}
+                  </span>
+                </button>
               )}
 
               {/* BILLING INTELLIGENCE */}
@@ -1164,14 +1261,18 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
                     ))}
                   </ul>
                   {carePlan.predictedExam.redFlags.length > 0 && (
-                    <div className="pt-2 border-t border-gray-800">
-                      <p className="text-xs font-semibold text-red-400 mb-1.5">If you find these — escalate plan:</p>
-                      {carePlan.predictedExam.redFlags.map((r, i) => (
-                        <p key={i} className="text-xs text-amber-300 flex items-start gap-1.5">
-                          <span className="flex-shrink-0">⚠</span>{r}
-                        </p>
-                      ))}
-                    </div>
+                    <button
+                      onClick={() => setShowRedAlert(true)}
+                      className={cn(
+                        "w-full mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all",
+                        redAlertCleared ? "border-green-700/30 bg-green-900/10" : "border-red-700/30 bg-red-950/20 hover:border-red-600/50"
+                      )}
+                    >
+                      <span>{redAlertCleared ? "✅" : "🚨"}</span>
+                      <span className={cn("text-xs font-semibold", redAlertCleared ? "text-green-400" : "text-red-400")}>
+                        {redAlertCleared ? "Red flag symptoms cleared" : `${carePlan.predictedExam.redFlags.length} red flag symptom${carePlan.predictedExam.redFlags.length > 1 ? "s" : ""} — tap to verify`}
+                      </span>
+                    </button>
                   )}
                 </div>
               </div>
