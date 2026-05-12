@@ -20,6 +20,7 @@ import type { Patient, Appointment } from "@/lib/types";
 const tabs = [
   { id: "dashboard", label: "Dashboard", icon: "⊙" },
   { id: "pre-visit", label: "Pre-Visit Charting", icon: "👤" },
+  { id: "lab-review", label: "Lab Review", icon: "🧪" },
   { id: "scope", label: "Scope Validation", icon: "🛡" },
   { id: "care-planning", label: "Care Planning", icon: "✏️" },
   { id: "briefing", label: "Protective Briefing", icon: "📋" },

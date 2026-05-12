@@ -838,17 +838,23 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           {/* Voice listening indicator */}
           {voice.supported && (
-            <div className={cn(
-              "flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-all",
-              voice.listening
-                ? "border-green-500/60 bg-green-900/30 text-green-300 animate-pulse"
-                : "border-gray-700 bg-gray-800/50 text-gray-600"
-            )}>
-              <span>{voice.listening ? "🎤" : "🎙"}</span>
+            <button
+              onClick={voice.toggle}
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-all",
+                voice.listening
+                  ? "border-green-500/60 bg-green-900/30 text-green-300 animate-pulse"
+                  : voice.active
+                    ? "border-teal-600/60 bg-teal-900/20 text-teal-400"
+                    : "border-gray-700 bg-gray-800/50 text-gray-500 hover:text-gray-300 hover:border-gray-600"
+              )}
+              title={voice.active ? "Tap to turn off mic" : "Tap to activate voice commands"}
+            >
+              <span>{voice.listening ? "🎤" : voice.active ? "🎙" : "🎙"}</span>
               <span className="font-medium">
-                {voice.lastCommand || (voice.listening ? "Listening…" : "Hello PrognoSX")}
+                {voice.lastCommand || (voice.listening ? "Listening…" : voice.active ? "Say a command" : "Hello PrognoSX")}
               </span>
-            </div>
+            </button>
           )}
           {/* Visit timer + time-based billing code */}
           <span className="text-xs font-mono px-2 py-1 bg-gray-800 text-gray-400 rounded border border-gray-700 flex items-center gap-1.5">
@@ -912,20 +918,25 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
         )}>
           <span className="text-gray-500 flex-shrink-0 font-semibold">Pre-Room:</span>
           {[
-            { icon: "💊", label: `Rx queued → ${carePlan.prescriptions[0]?.pharmacy ?? "Pharmacy"}`, done: true },
-            { icon: "🧪", label: `${carePlan.diagnostics.items?.length ?? 0} labs ordered`, done: true },
-            { icon: "📱", label: "Patient education ready", done: true },
-            { icon: "📋", label: "SOAP complete", done: true },
-            { icon: "🔒", label: signed ? "Sent ✓" : "Awaiting signature", done: signed },
+            { icon: "💊", label: `Rx queued → ${carePlan.prescriptions[0]?.pharmacy ?? "Pharmacy"}`, done: true, anchor: "section-rx" },
+            { icon: "🧪", label: `${carePlan.diagnostics.items?.length ?? 0} labs ordered`, done: true, anchor: "section-diagnostics" },
+            { icon: "📱", label: "Patient education ready", done: true, anchor: "section-education" },
+            { icon: "📋", label: "SOAP complete", done: true, anchor: "section-soap" },
+            { icon: "🔒", label: signed ? "Sent ✓" : "Awaiting signature", done: signed, anchor: null },
           ].map(item => (
-            <span key={item.label} className={cn(
-              "flex items-center gap-1 px-2 py-0.5 rounded-full border flex-shrink-0 whitespace-nowrap",
-              item.done
-                ? "border-green-700/40 bg-green-900/20 text-green-400"
-                : "border-gray-700 text-gray-500"
-            )}>
+            <button
+              key={item.label}
+              onClick={() => item.anchor && document.getElementById(item.anchor)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className={cn(
+                "flex items-center gap-1 px-2 py-0.5 rounded-full border flex-shrink-0 whitespace-nowrap transition-all",
+                item.done
+                  ? "border-green-700/40 bg-green-900/20 text-green-400 hover:bg-green-900/40 hover:border-green-600/60"
+                  : "border-gray-700 text-gray-500",
+                item.anchor ? "cursor-pointer" : "cursor-default"
+              )}
+            >
               {item.icon} {item.label}
-            </span>
+            </button>
           ))}
         </div>
       )}
@@ -1419,20 +1430,20 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
               })()}
 
               {/* DIAGNOSTICS */}
-              <SectionCard title="Diagnostics & Labs" confidence={carePlan.diagnostics.confidence} source={carePlan.diagnostics.source} status={statuses["diagnostics"] ?? "accepted"} onAccept={() => accept("diagnostics")} onReject={() => reject("diagnostics")} items={carePlan.diagnostics.items} />
+              <div id="section-diagnostics"><SectionCard title="Diagnostics & Labs" confidence={carePlan.diagnostics.confidence} source={carePlan.diagnostics.source} status={statuses["diagnostics"] ?? "accepted"} onAccept={() => accept("diagnostics")} onReject={() => reject("diagnostics")} items={carePlan.diagnostics.items} /></div>
 
               {/* TREATMENT PLAN */}
               <SectionCard title="Treatment Plan" confidence={carePlan.treatmentPlan.confidence} source={carePlan.treatmentPlan.source} status={statuses["treatmentPlan"] ?? "accepted"} onAccept={() => accept("treatmentPlan")} onReject={() => reject("treatmentPlan")} items={carePlan.treatmentPlan.items} />
 
               {/* PATIENT EDUCATION */}
-              <SectionCard title="Patient Education" confidence={carePlan.patientEducation.confidence} source={carePlan.patientEducation.source} status={statuses["patientEducation"] ?? "accepted"} onAccept={() => accept("patientEducation")} onReject={() => reject("patientEducation")} items={carePlan.patientEducation.items} />
+              <div id="section-education"><SectionCard title="Patient Education" confidence={carePlan.patientEducation.confidence} source={carePlan.patientEducation.source} status={statuses["patientEducation"] ?? "accepted"} onAccept={() => accept("patientEducation")} onReject={() => reject("patientEducation")} items={carePlan.patientEducation.items} /></div>
 
               {/* FOLLOW-UP */}
               <SectionCard title="Follow-up & Red Flags" confidence={carePlan.followUp.confidence} source={carePlan.followUp.source} status={statuses["followUp"] ?? "accepted"} onAccept={() => accept("followUp")} onReject={() => reject("followUp")} items={carePlan.followUp.items} />
 
               {/* PRESCRIPTION ORDERS */}
               {carePlan.prescriptions.length > 0 && (
-                <div className="rounded-2xl border border-gray-700/40 overflow-hidden">
+                <div id="section-rx" className="rounded-2xl border border-gray-700/40 overflow-hidden">
                   <div className="px-4 py-3 bg-gray-800/70 border-b border-gray-700/40 flex items-center justify-between">
                     <span className="font-bold text-white text-sm">Prescription Orders</span>
                     <span className="text-xs font-mono text-gray-400">CPT: Main Rx</span>
@@ -1528,7 +1539,7 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
               )}
 
               {/* SOAP DROP CHART */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div id="section-soap" className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div className="px-4 py-2.5 border-b border-gray-800">
                   <p className="font-bold text-white text-sm">SOAP Note — Pre-Written</p>
                   <p className="text-xs text-gray-500">Edit any field · Click Done when satisfied</p>

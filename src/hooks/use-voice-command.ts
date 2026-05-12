@@ -18,22 +18,44 @@ interface Options {
 
 export function useVoiceCommand({ onCommand, enabled = true }: Options) {
   const [supported, setSupported] = useState(false);
-  const [listening, setListening] = useState(false); // active after wake word
+  const [active, setActive] = useState(false);   // mic is on (tap-to-activate)
+  const [listening, setListening] = useState(false); // wake word heard, awaiting command
   const [lastCommand, setLastCommand] = useState("");
 
   const onCommandRef = useRef(onCommand);
   useEffect(() => { onCommandRef.current = onCommand; }, [onCommand]);
 
+  const recognitionRef = useRef<ReturnType<typeof createRecognition> | null>(null);
   const listeningRef = useRef(false);
+  const autoOffRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fire = useCallback((cmd: VoiceCommand, label: string) => {
     setLastCommand(label);
     onCommandRef.current(cmd);
     listeningRef.current = false;
     setListening(false);
-    // Reset lastCommand display after 2s
-    setTimeout(() => setLastCommand(""), 2000);
+    setTimeout(() => setLastCommand(""), 2500);
   }, []);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function createRecognition(SR: any, onResult: (t: string) => void) {
+    const r = new SR();
+    r.continuous = true;
+    r.interimResults = true;
+    r.lang = "en-US";
+    r.maxAlternatives = 1;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    r.onresult = (event: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transcript = Array.from(event.results as any[])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((res: any) => res[0].transcript.toLowerCase().trim())
+        .join(" ");
+      onResult(transcript);
+    };
+    r.onerror = () => { /* silent */ };
+    return r;
+  }
 
   useEffect(() => {
     if (typeof window === "undefined" || !enabled) return;
@@ -42,23 +64,8 @@ export function useVoiceCommand({ onCommand, enabled = true }: Options) {
     if (!SR) return;
     setSupported(true);
 
-    const recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognition.maxAlternatives = 1;
-
-    let wakeTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (event: any) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const transcript = Array.from(event.results as any[])
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((r: any) => r[0].transcript.toLowerCase().trim())
-        .join(" ");
-
-      // Wake word detection
+    const handleTranscript = (transcript: string) => {
+      // Wake word
       if (
         transcript.includes("hello prognosx") ||
         transcript.includes("hey prognosx") ||
@@ -68,52 +75,71 @@ export function useVoiceCommand({ onCommand, enabled = true }: Options) {
         if (!listeningRef.current) {
           listeningRef.current = true;
           setListening(true);
-          // Auto-cancel after 8s if no command
-          if (wakeTimeout) clearTimeout(wakeTimeout);
-          wakeTimeout = setTimeout(() => {
-            listeningRef.current = false;
-            setListening(false);
-          }, 8000);
         }
         return;
       }
 
       if (!listeningRef.current) return;
 
-      // Command matching
-      if (transcript.includes("confirm all") || transcript.includes("confirm everything") || transcript.includes("accept all")) {
+      if (transcript.includes("confirm all") || transcript.includes("accept all")) {
         fire("confirm-all", "Confirm All ✓");
-      } else if (transcript.includes("sign and send") || transcript.includes("sign all") || transcript.includes("send all") || transcript.includes("sign it")) {
+      } else if (transcript.includes("sign and send") || transcript.includes("sign all") || transcript.includes("sign it")) {
         fire("sign", "Sign & Send All ✓");
-      } else if (transcript.includes("quick mode") || transcript.includes("quick confirm") || transcript.includes("speed mode")) {
+      } else if (transcript.includes("quick mode") || transcript.includes("speed mode")) {
         fire("quick-mode", "Quick Mode ✓");
-      } else if (transcript.includes("go back") || transcript.includes("back to schedule") || transcript.includes("next patient")) {
+      } else if (transcript.includes("go back") || transcript.includes("next patient")) {
         fire("back", "Going Back ✓");
-      } else if (transcript.includes("regenerate") || transcript.includes("try again") || transcript.includes("redo chart")) {
+      } else if (transcript.includes("regenerate") || transcript.includes("redo chart")) {
         fire("regenerate", "Regenerating ✓");
-      } else if (transcript.includes("reject assessment") || transcript.includes("decline assessment")) {
+      } else if (transcript.includes("reject assessment")) {
         fire("reject-assessment", "Assessment Rejected ✓");
       } else if (transcript.includes("reject diagnostics") || transcript.includes("decline labs")) {
         fire("reject-diagnostics", "Diagnostics Rejected ✓");
-      } else if (transcript.includes("reject treatment") || transcript.includes("decline treatment")) {
+      } else if (transcript.includes("reject treatment")) {
         fire("reject-treatment", "Treatment Rejected ✓");
       }
     };
 
-    recognition.onerror = () => { /* swallow mic errors silently */ };
-    recognition.onend = () => {
-      // Auto-restart for always-on listening
-      try { recognition.start(); } catch { /* already started */ }
-    };
-
-    try { recognition.start(); } catch { /* not yet ready */ }
-
-    return () => {
-      if (wakeTimeout) clearTimeout(wakeTimeout);
-      recognition.onend = null; // prevent auto-restart loop after cleanup
-      try { recognition.stop(); } catch { /* already stopped */ }
-    };
+    recognitionRef.current = createRecognition(SR, handleTranscript);
   }, [enabled, fire]);
 
-  return { supported, listening, lastCommand };
+  const toggle = useCallback(() => {
+    const rec = recognitionRef.current;
+    if (!rec) return;
+
+    if (active) {
+      // Turn off
+      if (autoOffRef.current) clearTimeout(autoOffRef.current);
+      rec.onend = null;
+      try { rec.stop(); } catch { /* ok */ }
+      setActive(false);
+      setListening(false);
+      listeningRef.current = false;
+    } else {
+      // Turn on — auto-off after 45s
+      try { rec.start(); } catch { /* already running */ }
+      rec.onend = () => {
+        if (active) try { rec.start(); } catch { /* ok */ }
+      };
+      setActive(true);
+      if (autoOffRef.current) clearTimeout(autoOffRef.current);
+      autoOffRef.current = setTimeout(() => {
+        rec.onend = null;
+        try { rec.stop(); } catch { /* ok */ }
+        setActive(false);
+        setListening(false);
+        listeningRef.current = false;
+      }, 45000);
+    }
+  }, [active]);
+
+  useEffect(() => {
+    return () => {
+      if (autoOffRef.current) clearTimeout(autoOffRef.current);
+      const rec = recognitionRef.current;
+      if (rec) { rec.onend = null; try { rec.stop(); } catch { /* ok */ } }
+    };
+  }, []);
+
+  return { supported, active, listening, lastCommand, toggle };
 }
