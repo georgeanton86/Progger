@@ -785,7 +785,7 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
                 : "border-gray-700 bg-gray-800/50 text-gray-600"
             )}>
               <span>{voice.listening ? "🎤" : "🎙"}</span>
-              <span className="hidden sm:inline font-medium">
+              <span className="font-medium">
                 {voice.lastCommand || (voice.listening ? "Listening…" : "Hello PrognoSX")}
               </span>
             </div>

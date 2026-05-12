@@ -11,6 +11,7 @@ import { PatientsTab } from "@/components/tabs/patients-tab";
 import { AppointmentsTab } from "@/components/tabs/appointments-tab";
 import { EhrIntegrationTab } from "@/components/tabs/ehr-integration-tab";
 import { SettingsTab } from "@/components/tabs/settings-tab";
+import { LabReviewTab } from "@/components/tabs/lab-review-tab";
 import { PatientAvatar, PatientHealthCard } from "@/components/patient-avatar";
 import { StreamlinedEncounter, buildCarePlanPrompt, parseCarePlanJSON, type CarePlan } from "@/components/encounter/streamlined-encounter";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ const tabs = [
   { id: "revenue", label: "Revenue Prediction", icon: "📈" },
   { id: "patients", label: "Patient Management", icon: "👥" },
   { id: "appointments", label: "Appointments", icon: "📅" },
+  { id: "lab-review", label: "Lab Review", icon: "🧪" },
   { id: "ehr", label: "EHR Integration", icon: "🔗" },
   { id: "settings", label: "Profile & Credentials", icon: "⚙️" },
 ];
@@ -403,6 +405,7 @@ export default function DashboardPage() {
           {!encounterCtx && activeTab === "revenue" && <RevenueTab />}
           {!encounterCtx && activeTab === "patients" && <PatientsTab />}
           {!encounterCtx && activeTab === "appointments" && <AppointmentsTab />}
+          {!encounterCtx && activeTab === "lab-review" && <LabReviewTab />}
           {!encounterCtx && activeTab === "ehr" && <EhrIntegrationTab />}
           {!encounterCtx && activeTab === "settings" && <SettingsTab />}
         </main>

@@ -1,4 +1,4 @@
-import type { Patient, Appointment, DashboardStats, RevenueOpportunity, ScopeAlert, Provider } from "./types";
+import type { Patient, Appointment, DashboardStats, RevenueOpportunity, ScopeAlert, Provider, PatientLabReview } from "./types";
 
 export const sampleProvider: Provider = {
   id: "prov-1",
@@ -130,6 +130,23 @@ export const samplePatients: Patient[] = [
     revenuePerVisit: 145,
   },
   {
+    id: "p9",
+    name: "Dr. George Antonopoulos",
+    age: 37,
+    dateOfBirth: "1988-01-01",
+    insuranceProvider: "Self-Pay",
+    insurancePlan: "Direct Pay",
+    primaryComplaint: "Lab review — fertility protocol follow-up",
+    hpiPreview: "Lab review visit. Coming off Testosterone Cypionate for fertility planning. Currently on HCG 5,000 IU SC twice weekly + Enclomiphene 50mg PO three times weekly. No complaints. Labs drawn at Quest — comprehensive hormone panel, CBC, CMP.",
+    medicalHistory: ["Prior testosterone cypionate use (discontinued)", "Male factor infertility evaluation"],
+    medications: ["HCG 5,000 IU SC twice weekly", "Enclomiphene 50mg PO three times weekly"],
+    allergies: ["None"],
+    valueScore: 99,
+    paymentReliability: 100,
+    noShowRate: 0,
+    revenuePerVisit: 385,
+  },
+  {
     id: "p8",
     name: "Amanda Foster",
     age: 52,
@@ -164,6 +181,7 @@ export const sampleAppointments: Appointment[] = [
   { id: "a6", patientId: "p8", providerId: "prov-1", appointmentTime: localApptTime(14, 15), visitType: "office-visit", status: "scheduled", preVisitComplete: false, scopeStatus: "within_scope", insuranceVerified: false, estimatedRevenue: "210.00" },
   { id: "a7", patientId: "p4", providerId: "prov-1", appointmentTime: localApptTime(15, 0), visitType: "office-visit", status: "scheduled", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "220.00" },
   { id: "a8", patientId: "p7", providerId: "prov-1", appointmentTime: localApptTime(15, 45), visitType: "office-visit", status: "scheduled", preVisitComplete: false, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "145.00" },
+  { id: "a9", patientId: "p9", providerId: "prov-1", appointmentTime: localApptTime(16, 30), visitType: "lab-review", status: "checked-in", preVisitComplete: true, scopeStatus: "within_scope", insuranceVerified: true, estimatedRevenue: "385.00" },
 ];
 
 export const sampleStats: DashboardStats = {
@@ -191,6 +209,68 @@ export const sampleScopeAlerts: ScopeAlert[] = [
   { id: "s1", procedure: "Spirometry interpretation", alertType: "documentation", riskLevel: "low", recommendation: "Ensure proper documentation of clinical indication" },
   { id: "s2", procedure: "Controlled substance prescribing", alertType: "compliance", riskLevel: "medium", recommendation: "Verify PDMP check prior to prescribing; document in chart" },
   { id: "s3", procedure: "Ozempic prior auth", alertType: "authorization", riskLevel: "medium", recommendation: "Blue Shield requires BMI ≥30 + one comorbidity for GLP-1 coverage" },
+];
+
+export const sampleLabReviews: PatientLabReview[] = [
+  {
+    patientId: "p9",
+    date: "2025-05-08",
+    visitContext: "Fertility Protocol Follow-Up",
+    protocol: "HCG 5,000 IU SC 2×/wk · Enclomiphene 50mg PO 3×/wk · Post-Testosterone Cypionate",
+    providerName: "Dr. George Antonopoulos, MD",
+    summary: "Lab review following testosterone cypionate discontinuation for fertility planning. Currently on HCG + enclomiphene recovery protocol. Testosterone is recovering with mild HCG-driven estradiol elevation. Spermatogenesis markers (FSH/LH) improving. Hematocrit near upper limit — consistent with prior androgen use, trending down. Liver, kidney, and metabolic panels all clear.",
+    categories: [
+      {
+        name: "Hormone Panel",
+        icon: "⚗️",
+        results: [
+          { name: "Total Testosterone", value: 387, unit: "ng/dL", refRange: "264–916", status: "borderline-low", note: "Recovering post-TRT. Target >450–600 on current protocol. Expect rise over next 8 weeks." },
+          { name: "Free Testosterone", value: "9.8", unit: "pg/mL", refRange: "9.3–26.5", status: "borderline-low", note: "Low-normal. SHBG binding limiting bioavailability. Will improve as total T rises." },
+          { name: "Estradiol (E2)", value: 42, unit: "pg/mL", refRange: "10–40", status: "high", note: "Mildly elevated — HCG drives aromatization to estrogen. Monitor for symptoms. Consider DIM 200mg/day if symptomatic." },
+          { name: "LH", value: "3.8", unit: "mIU/mL", refRange: "1.5–9.3", status: "normal", note: "Recovering. Enclomiphene is working — blocking estrogen negative feedback on the pituitary." },
+          { name: "FSH", value: "5.2", unit: "mIU/mL", refRange: "1.5–12.4", status: "normal", note: "Good response. FSH drives spermatogenesis — this is the key fertility marker." },
+          { name: "SHBG", value: "31", unit: "nmol/L", refRange: "16.5–55.9", status: "normal" },
+          { name: "Prolactin", value: "8.4", unit: "ng/mL", refRange: "4.0–15.2", status: "optimal", note: "Normal. Elevated prolactin would suppress fertility — you're clear." },
+          { name: "DHEA-Sulfate", value: 285, unit: "μg/dL", refRange: "138–475", status: "optimal" },
+        ],
+      },
+      {
+        name: "Complete Blood Count",
+        icon: "🩸",
+        results: [
+          { name: "Hematocrit", value: "49.8", unit: "%", refRange: "38.5–50.0", status: "borderline-high", note: "Approaching upper limit from prior testosterone use. Trending down. Donate blood if it reaches 52%." },
+          { name: "Hemoglobin", value: "16.4", unit: "g/dL", refRange: "13.5–17.5", status: "normal" },
+          { name: "RBC", value: "5.6", unit: "M/μL", refRange: "4.5–5.9", status: "normal" },
+          { name: "WBC", value: "6.8", unit: "K/μL", refRange: "4.5–11.0", status: "optimal" },
+          { name: "Platelets", value: 248, unit: "K/μL", refRange: "150–400", status: "optimal" },
+          { name: "MCV", value: "88", unit: "fL", refRange: "80–100", status: "optimal" },
+        ],
+      },
+      {
+        name: "Metabolic Panel",
+        icon: "⚡",
+        results: [
+          { name: "Glucose", value: 94, unit: "mg/dL", refRange: "70–99", status: "optimal" },
+          { name: "Creatinine", value: "1.05", unit: "mg/dL", refRange: "0.72–1.25", status: "optimal", note: "Kidneys functioning well." },
+          { name: "BUN", value: 18, unit: "mg/dL", refRange: "7–25", status: "optimal" },
+          { name: "ALT", value: 28, unit: "U/L", refRange: "7–56", status: "optimal", note: "Liver clear — no hepatotoxicity from prior androgen use." },
+          { name: "AST", value: 24, unit: "U/L", refRange: "10–40", status: "optimal" },
+          { name: "Total Bilirubin", value: "0.6", unit: "mg/dL", refRange: "0.2–1.2", status: "optimal" },
+          { name: "Sodium", value: 140, unit: "mEq/L", refRange: "136–145", status: "optimal" },
+          { name: "Potassium", value: "4.1", unit: "mEq/L", refRange: "3.5–5.1", status: "optimal" },
+        ],
+      },
+    ],
+    recommendations: [
+      "Continue HCG 5,000 IU SC twice weekly — maintaining LH support",
+      "Continue Enclomiphene 50mg PO three times weekly — stimulating pituitary FSH/LH",
+      "Monitor Estradiol — if symptoms develop or E2 >55, start DIM 200mg daily or anastrozole 0.25mg EOD",
+      "If hematocrit reaches 52%, donate 1 unit whole blood (therapeutic phlebotomy)",
+      "Semen analysis in 90 days to assess sperm production response",
+      "Target: Testosterone 500–700 ng/dL and FSH 6–12 mIU/mL at next check",
+    ],
+    followUp: "Recheck testosterone, estradiol, FSH, LH, and CBC in 8–10 weeks. Semen analysis at 12 weeks. Adjust protocol if testosterone <400 ng/dL or estradiol >60 pg/mL.",
+  },
 ];
 
 export function getPatientWithTime(patientId: string) {

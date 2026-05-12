@@ -101,3 +101,32 @@ export type ScopeAlert = {
   riskLevel: string;
   recommendation: string | null;
 };
+
+export type LabResultStatus = "optimal" | "normal" | "borderline-low" | "borderline-high" | "low" | "high" | "critical";
+
+export type LabResult = {
+  name: string;
+  value: number | string;
+  unit: string;
+  refRange: string;
+  status: LabResultStatus;
+  note?: string;
+};
+
+export type LabCategory = {
+  name: string;
+  icon: string;
+  results: LabResult[];
+};
+
+export type PatientLabReview = {
+  patientId: string;
+  date: string;
+  visitContext: string;
+  protocol?: string;
+  providerName: string;
+  categories: LabCategory[];
+  summary: string;
+  recommendations: string[];
+  followUp: string;
+};
