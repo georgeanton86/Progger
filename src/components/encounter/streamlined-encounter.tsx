@@ -237,28 +237,43 @@ function SectionCard({
 }
 
 function LoadingScreen() {
-  const steps = ["Analyzing Chief Complaint", "Applying 2025 EBM Guidelines", "Generating DDX + ICD-10", "Writing SOAP Note", "Calculating E&M Billing", "Checking HEDIS Measures", "Flagging Liability Risks", "Finalizing Rx Orders"];
+  const steps = ["Analyzing Chief Complaint", "Applying 2025 EBM Guidelines", "Generating DDX + ICD-10", "Writing SOAP Note", "Calculating E&M Billing", "Checking HEDIS Measures", "Flagging Liability Risks", "Finalizing Chart"];
   const [step, setStep] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setStep(s => (s + 1) % steps.length), 800);
+    const t = setInterval(() => setStep(s => (s + 1) % steps.length), 900);
     return () => clearInterval(t);
   }, []);
   return (
     <div className="flex flex-col items-center justify-center min-h-96 gap-6 px-6 py-12">
-      <div className="relative w-24 h-24">
+      <style>{`
+        @keyframes breathe {
+          0%, 100% { opacity: 0.25; transform: scale(0.94); }
+          50% { opacity: 1; transform: scale(1); }
+        }
+        .predictachart-logo { animation: breathe 2.4s ease-in-out infinite; }
+      `}</style>
+      <div className="relative w-28 h-28">
         <div className="absolute inset-0 rounded-full border-4 border-teal-900/40 border-t-teal-400 animate-spin" />
-        <div className="absolute inset-3 rounded-full border-4 border-teal-900/20 border-b-teal-600 animate-spin" style={{ animationDirection: "reverse", animationDuration: "1.5s" }} />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-2xl">Rx</span>
+        <div className="absolute inset-3 rounded-full border-4 border-teal-900/20 border-b-teal-500 animate-spin" style={{ animationDirection: "reverse", animationDuration: "1.5s" }} />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 predictachart-logo">
+          <svg width="32" height="22" viewBox="0 0 32 22" fill="none">
+            <rect x="0" y="14" width="5" height="8" rx="1.5" fill="#2dd4bf" opacity="0.7"/>
+            <rect x="7" y="8" width="5" height="14" rx="1.5" fill="#2dd4bf" opacity="0.85"/>
+            <rect x="14" y="3" width="5" height="19" rx="1.5" fill="#2dd4bf"/>
+            <rect x="21" y="10" width="5" height="12" rx="1.5" fill="#2dd4bf" opacity="0.85"/>
+            <rect x="28" y="6" width="4" height="16" rx="1.5" fill="#2dd4bf" opacity="0.7"/>
+            <polyline points="2.5,14 9.5,8 16.5,3 23.5,10 30,6" stroke="#5eead4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.5"/>
+          </svg>
+          <span style={{ fontSize: 9, letterSpacing: "0.08em", color: "#2dd4bf", fontWeight: 700, lineHeight: 1 }}>PREDICTA</span>
         </div>
       </div>
       <div className="text-center">
-        <p className="text-white font-bold text-xl mb-1">Building Predictive Chart</p>
+        <p className="text-white font-bold text-xl mb-0.5">PredictaChart<sup className="text-xs text-teal-400">™</sup></p>
         <p className="text-teal-400 text-sm font-medium animate-pulse">{steps[step]}...</p>
-        <p className="text-gray-500 text-xs mt-2">Applying AHA · ADA · USPSTF · IDSA · AAFP 2025 guidelines</p>
+        <p className="text-gray-500 text-xs mt-2">AHA · ADA · USPSTF · IDSA · AAFP 2025</p>
       </div>
       <div className="grid grid-cols-2 gap-2 max-w-xs w-full">
-        {["Evidence-Based Rx", "E&M Billing", "Legal Guard", "HEDIS Checks"].map((s, i) => (
+        {["Evidence-Based", "E&M Billing", "Legal Guard", "HEDIS Checks"].map((s, i) => (
           <div key={s} className={cn("text-xs px-3 py-1.5 rounded-lg border text-center transition-colors", i <= step % 4 ? "border-teal-700/60 bg-teal-900/20 text-teal-400" : "border-gray-800 text-gray-600")}>
             {i <= step % 4 ? "✓ " : ""}{s}
           </div>
@@ -511,30 +526,17 @@ function withDefaults(p: Partial<CarePlan>): CarePlan {
 
 export function buildCarePlanPrompt(patient: Patient, appointment: Appointment): string {
   void appointment;
-  return `You are PrognoSX — the world's most advanced predictive EHR engine. You are a board-certified Family Practice physician in California with expertise in evidence-based medicine, medical billing, and healthcare law. Generate a COMPLETE predictive pre-visit care plan. The provider will review and sign in under 5 minutes. Return ONLY valid JSON — no markdown, no text outside JSON. CRITICAL JSON RULES: never use literal newline characters inside string values (use \\n instead); never use unescaped double quotes inside string values (use single quotes instead); all string values must be on a single line.
+  return `PrognoSX predictive EHR — board-certified CA Family Practice physician. Generate a pre-visit care plan. Return ONLY valid JSON. JSON rules: no literal newlines inside strings (use \\n), no unescaped quotes, all strings on one line.
 
-PATIENT:
-Name: ${patient.name} | Age: ${patient.age} | DOB: ${patient.dateOfBirth}
-Chief Complaint: ${patient.primaryComplaint}
+PATIENT: ${patient.name} | Age ${patient.age} | CC: ${patient.primaryComplaint}
 HPI: ${patient.hpiPreview}
-PMH: ${patient.medicalHistory.join(", ")}
-Medications: ${patient.medications.join(", ")}
-Allergies: ${patient.allergies.join(", ")} ← CHECK ALL Rx AGAINST THESE
+PMH: ${patient.medicalHistory.join(", ")} | Meds: ${patient.medications.join(", ")} | Allergies: ${patient.allergies.join(", ")}
 Insurance: ${patient.insuranceProvider} ${patient.insurancePlan}
 
-REQUIREMENTS — apply ALL of these:
-1. EVIDENCE-BASED (2024-2025): USPSTF, AHA/ACC, ADA, IDSA, AAFP, Cochrane, UpToDate
-2. ALLERGY CHECK: Cross-reference ALL proposed medications against patient allergies
-3. E&M BILLING 2025: MDM-based coding — 99212=Straightforward, 99213=Low, 99214=Moderate, 99215=High
-4. LEGAL DOCUMENTATION: California PDMP for controlled substances, informed consent, negative findings
-5. HEDIS/QUALITY MEASURES: Flag overdue screenings per NCQA 2025 specifications
-6. LIABILITY: Flag missed diagnosis risks, medication contraindications, documentation gaps
-7. PREDICTIVE EXAM: Hyper-specific expected physical exam findings with precise terminology
+Rules: allergy-check all Rx; MDM billing (99212-99215); HEDIS 2025; CA PDMP for controlled Rx; cite evidence sources.
 
-Return ONLY this JSON structure (no extra text):
-{"predictiveAccuracy":94,"assessment":{"confidence":93,"primary":"Diagnosis (ICD-10: X00.0)","secondaries":["Secondary (ICD-10: X00.0)"],"ruleOut":["Rule out — reason"],"source":"Guideline 2024"},"predictedExam":{"expected":["System: specific finding"],"redFlags":["Red flag finding"]},"diagnostics":{"confidence":88,"items":["Test — indication"],"source":"Guideline"},"treatmentPlan":{"confidence":94,"items":["Treatment with dose/frequency"],"source":"Evidence"},"patientEducation":{"confidence":97,"items":["Education point"],"source":"CDC/AAFP"},"followUp":{"confidence":96,"items":["Return in X for Y","Return immediately if: symptoms"],"source":"AAFP"},"ddx":[{"diagnosis":"Name","icd10":"X00.0","confidence":93,"legalRisk":"low","recommended":true,"description":"Key features"},{"diagnosis":"Name","icd10":"X00.0","confidence":55,"legalRisk":"low","recommended":false,"description":"Rule out if..."},{"diagnosis":"Name","icd10":"X00.0","confidence":35,"legalRisk":"medium","recommended":false,"description":"Consider if..."},{"diagnosis":"Name","icd10":"X00.0","confidence":20,"legalRisk":"high","recommended":false,"description":"Must exclude"},{"diagnosis":"Name","icd10":"X00.0","confidence":10,"legalRisk":"high","recommended":false,"description":"Rare but serious"}],"prescriptions":[{"name":"Drug","dosing":"Xmg","route":"PO","duration":"X days","pharmacy":"CVS Main St","controlled":false}],"soap":{"subjective":"CC: complaint. HPI: detailed history. PMH: relevant. Meds: list. Allergies: list. ROS: positives and negatives.","objective":"Vitals: BP predicted, HR predicted, Temp predicted, SpO2 predicted. General: appearance. Specific system findings.","assessment":"1. Primary Dx (ICD-10) — reasoning. 2. Secondary if applicable.","plan":"1. Medication with dose/sig. 2. Diagnostic test. 3. Referral if needed. 4. Education. 5. Follow-up timing. 6. Billing: E&M code based on MDM."},"billing":{"emCode":"99214","emLevel":"Moderate MDM","mdm":{"problems":"X chronic conditions","data":"Labs reviewed/ordered","risk":"Prescription drug management","level":"Moderate (2/3 MDM elements)"},"baseReimbursement":165,"addOnCodes":[{"code":"G2211","description":"Longitudinal care add-on","revenue":16}],"totalBillable":181,"modifiers":["Modifier 25 if additional procedure"],"documentationRequired":["Document MDM explicitly","Note complexity","List data reviewed","Document risk"]},"upsells":[{"procedure":"Procedure","cpt":"00000","revenue":120,"scopePercent":96,"legalRisk":"low","indication":"Clinical indication for this patient"}],"qualityMeasures":[{"measure":"HEDIS measure","hedis":"Abbreviation","status":"due","action":"Action to satisfy today","liabilityIfMissed":"Risk and consequence"}],"liabilityFlags":[{"severity":"warning","flag":"Specific risk","action":"Corrective action"}],"returnHooks":[{"trigger":"Reason to return","timeframe":"X weeks","revenue":185,"qualityMeasure":"HEDIS measure"}],"recurringRevenue":{"qualifies":true,"codes":[{"code":"99490","name":"Chronic Care Management","category":"CCM","monthlyRevenue":62,"annualRevenue":744,"requirement":"2+ chronic conditions, 20+ min/month","eligible":true,"enrollmentAction":"Obtain CCM consent today"},{"code":"99487","name":"Complex CCM","category":"CCM","monthlyRevenue":134,"annualRevenue":1608,"requirement":"3+ complex conditions, 60+ min/month","eligible":false,"enrollmentAction":"N/A"},{"code":"99454","name":"RPM Device Supply","category":"RPM","monthlyRevenue":55,"annualRevenue":660,"requirement":"CHF/HTN/DM requiring monitoring","eligible":false,"enrollmentAction":"N/A"},{"code":"99457","name":"RPM Management","category":"RPM","monthlyRevenue":54,"annualRevenue":648,"requirement":"20+ min/month reviewing RPM data","eligible":false,"enrollmentAction":"N/A"},{"code":"G0438","name":"Annual Wellness Visit","category":"AWV","monthlyRevenue":0,"annualRevenue":185,"requirement":"Medicare patient only","eligible":false,"enrollmentAction":"N/A"},{"code":"G0507","name":"Behavioral Health Integration","category":"BHI","monthlyRevenue":50,"annualRevenue":600,"requirement":"Behavioral health diagnosis, 20+ min/month","eligible":false,"enrollmentAction":"N/A"}],"totalMonthly":62,"totalAnnual":744,"enrollmentNote":"CCM consent required at this visit."}}
-
-CCM eligible if 2+ chronic conditions. RPM eligible if CHF/uncontrolled HTN/DM/COPD. AWV only for Medicare. BHI for any behavioral health diagnosis.`;
+Return ONLY this JSON (fill in real data, keep structure exact):
+{"predictiveAccuracy":94,"assessment":{"confidence":93,"primary":"Dx (ICD-10)","secondaries":["2nd"],"ruleOut":["rule out"],"source":"Guideline"},"predictedExam":{"expected":["finding"],"redFlags":["red flag"]},"diagnostics":{"confidence":88,"items":["test — why"],"source":"Guideline"},"treatmentPlan":{"confidence":94,"items":["treatment"],"source":"Evidence"},"patientEducation":{"confidence":97,"items":["point"],"source":"CDC"},"followUp":{"confidence":96,"items":["return in X for Y"],"source":"AAFP"},"ddx":[{"diagnosis":"Name","icd10":"X00.0","confidence":93,"legalRisk":"low","recommended":true,"description":"features"},{"diagnosis":"Name","icd10":"X00.0","confidence":55,"legalRisk":"low","recommended":false,"description":"rule out if"},{"diagnosis":"Name","icd10":"X00.0","confidence":35,"legalRisk":"medium","recommended":false,"description":"consider if"},{"diagnosis":"Name","icd10":"X00.0","confidence":20,"legalRisk":"high","recommended":false,"description":"must exclude"}],"prescriptions":[{"name":"Drug","dosing":"Xmg","route":"PO","duration":"X days","pharmacy":"CVS","controlled":false}],"soap":{"subjective":"CC/HPI/PMH/Meds/Allergies/ROS","objective":"Vitals predicted. Exam findings.","assessment":"1. Dx (ICD-10) — reasoning.","plan":"1. Rx. 2. Labs. 3. Education. 4. Follow-up. 5. Billing code."},"billing":{"emCode":"99214","emLevel":"Moderate MDM","mdm":{"problems":"chronic conditions","data":"labs reviewed","risk":"Rx management","level":"Moderate"},"baseReimbursement":165,"addOnCodes":[{"code":"G2211","description":"Longitudinal care","revenue":16}],"totalBillable":181,"modifiers":[],"documentationRequired":["Document MDM"]},"upsells":[{"procedure":"Procedure","cpt":"00000","revenue":120,"scopePercent":96,"legalRisk":"low","indication":"indication"}],"qualityMeasures":[{"measure":"HEDIS measure","hedis":"Abbr","status":"due","action":"action today","liabilityIfMissed":"risk"}],"liabilityFlags":[{"severity":"warning","flag":"risk","action":"action"}],"returnHooks":[{"trigger":"reason","timeframe":"X weeks","revenue":185,"qualityMeasure":"HEDIS"}],"recurringRevenue":{"qualifies":true,"codes":[{"code":"99490","name":"CCM","category":"CCM","monthlyRevenue":62,"annualRevenue":744,"requirement":"2+ chronic","eligible":true,"enrollmentAction":"Get CCM consent"}],"totalMonthly":62,"totalAnnual":744,"enrollmentNote":"CCM consent required."}}`;
 }
 
 export function StreamlinedEncounter({ patient, appointment, onBack, initialCarePlan }: { patient: Patient; appointment: Appointment; onBack: () => void; initialCarePlan?: CarePlan }) {
