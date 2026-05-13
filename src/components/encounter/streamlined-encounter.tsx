@@ -879,6 +879,18 @@ function ConfirmModal({ carePlan, patient, onConfirm, onClose }: { carePlan: Car
   );
 }
 
+type DocumentExtraction = {
+  documentType?: string;
+  facility?: string;
+  dateOnDocument?: string;
+  labs?: { name: string; value: string; unit: string; refRange: string; flag: string }[];
+  medications?: { name: string; dose: string; frequency: string }[];
+  diagnoses?: { code?: string; description: string }[];
+  allergies?: { substance: string; reaction: string }[];
+  notes?: string;
+  actionItems?: string[];
+};
+
 // Escape unescaped control characters (literal newlines, tabs, carriage returns)
 // inside JSON string values. This is the most common cause of "Expected ',' or '}'"
 // errors when an AI generates multi-line clinical text in JSON strings.
@@ -1034,6 +1046,9 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
   const [quickMode, setQuickMode] = useState(false);
   const [showAutoBook, setShowAutoBook] = useState(false);
   const [showPrintSummary, setShowPrintSummary] = useState(false);
+  const [attachState, setAttachState] = useState<"idle" | "loading" | "done">("idle");
+  const [attachResult, setAttachResult] = useState<DocumentExtraction | null>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
   const visitTimer = useTimer();
   const [preVisitMinutes] = useState(8); // pre-visit chart review time
   const totalEncounterMinutes = preVisitMinutes + visitTimer.totalMinutes;
@@ -1106,6 +1121,33 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
       setGenerating(false);
     }
   }, [patient, appointment]);
+
+  const extractDocument = useCallback(async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) return;
+    setAttachState("loading");
+    setAttachResult(null);
+    const mt = file.type || "image/jpeg";
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const base64 = (e.target?.result as string).split(",")[1];
+      try {
+        const res = await fetch("/api/radiology", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64, mediaType: mt, mode: "document" }),
+        });
+        if (!res.ok) throw new Error("Extraction failed");
+        const d = await res.json();
+        const start = d.reply.indexOf("{");
+        const parsed: DocumentExtraction = start >= 0 ? JSON.parse(d.reply.slice(start)) : {};
+        setAttachResult(parsed);
+        setAttachState("done");
+      } catch {
+        setAttachState("idle");
+      }
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   // If a pre-generated care plan was passed in, initialize from it immediately
   useEffect(() => {
@@ -1438,6 +1480,62 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
           <div>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">History</p>
             <ul className="space-y-0.5">{patient.medicalHistory.map(h => <li key={h} className="text-xs text-gray-400">• {h}</li>)}</ul>
+          </div>
+
+          {/* Smart Document Attach */}
+          <div className="pt-2 border-t border-gray-800">
+            <input ref={attachInputRef} type="file" accept="image/*" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) extractDocument(f); if (attachInputRef.current) attachInputRef.current.value = ""; }} />
+            {attachState === "idle" && (
+              <button onClick={() => attachInputRef.current?.click()}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-gray-700 hover:border-teal-600/60 hover:bg-teal-900/10 text-gray-500 hover:text-teal-400 text-xs transition-all">
+                <span>📎</span><span>Attach Document / Lab Report</span>
+              </button>
+            )}
+            {attachState === "loading" && (
+              <div className="flex items-center gap-2 px-3 py-2 text-xs text-teal-400">
+                <div className="w-3 h-3 rounded-full border-2 border-teal-400 border-t-transparent animate-spin flex-shrink-0" />
+                Extracting document with AI…
+              </div>
+            )}
+            {attachState === "done" && attachResult && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-teal-400">{attachResult.documentType || "Document"} extracted</p>
+                  <button onClick={() => { setAttachState("idle"); setAttachResult(null); }} className="text-xs text-gray-600 hover:text-white">✕</button>
+                </div>
+                {(attachResult.labs ?? []).length > 0 && (
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-gray-500 font-semibold">Labs ({attachResult.labs!.length})</p>
+                    {attachResult.labs!.slice(0, 6).map((l, i) => (
+                      <div key={i} className="flex items-center justify-between px-2 py-1 bg-gray-800/60 rounded text-xs">
+                        <span className="text-gray-300 truncate">{l.name}</span>
+                        <span className={cn("font-mono ml-2 flex-shrink-0",
+                          l.flag === "critical" ? "text-red-400 font-bold" :
+                          l.flag === "high" || l.flag === "low" ? "text-amber-400" : "text-green-400"
+                        )}>{l.value} {l.unit}</span>
+                      </div>
+                    ))}
+                    {attachResult.labs!.length > 6 && <p className="text-xs text-gray-600 text-center">+{attachResult.labs!.length - 6} more values</p>}
+                  </div>
+                )}
+                {(attachResult.medications ?? []).length > 0 && (
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold mb-0.5">Medications</p>
+                    {attachResult.medications!.map((m, i) => <p key={i} className="text-xs text-gray-300">• {m.name} {m.dose} {m.frequency}</p>)}
+                  </div>
+                )}
+                {(attachResult.actionItems ?? []).length > 0 && (
+                  <div className="space-y-0.5">
+                    {attachResult.actionItems!.map((a, i) => <p key={i} className="text-xs text-amber-400">⚡ {a}</p>)}
+                  </div>
+                )}
+                <button onClick={() => attachInputRef.current?.click()}
+                  className="w-full text-xs py-1.5 rounded-lg border border-dashed border-gray-700 hover:border-gray-500 text-gray-600 hover:text-gray-400 transition-colors">
+                  + Attach Another
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

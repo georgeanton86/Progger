@@ -12,6 +12,7 @@ import { AppointmentsTab } from "@/components/tabs/appointments-tab";
 import { EhrIntegrationTab } from "@/components/tabs/ehr-integration-tab";
 import { SettingsTab } from "@/components/tabs/settings-tab";
 import { LabReviewTab } from "@/components/tabs/lab-review-tab";
+import { RadiologyTab } from "@/components/tabs/radiology-tab";
 import { PatientAvatar, PatientHealthCard } from "@/components/patient-avatar";
 import { StreamlinedEncounter, buildCarePlanPrompt, parseCarePlanJSON, type CarePlan } from "@/components/encounter/streamlined-encounter";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ const tabs = [
   { id: "dashboard", label: "Dashboard", icon: "⊙" },
   { id: "pre-visit", label: "Pre-Visit Charting", icon: "👤" },
   { id: "lab-review", label: "Lab Review", icon: "🧪" },
+  { id: "radiology", label: "Radiology AI Studio", icon: "🔬" },
   { id: "scope", label: "Scope Validation", icon: "🛡" },
   { id: "care-planning", label: "Care Planning", icon: "✏️" },
   { id: "briefing", label: "Protective Briefing", icon: "📋" },
@@ -62,6 +64,106 @@ function StatCard({ label, value, subtitle, color }: { label: string; value: str
 
 function getInitials(name: string) {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
+function QuickIntakeModal({ onStart, onClose }: { onStart: (patient: Patient, apt: Appointment) => void; onClose: () => void }) {
+  const [form, setForm] = useState({ name: "", age: "", dob: "", insurance: "Self-Pay", plan: "", complaint: "", hpi: "", history: "", meds: "", allergies: "NKDA" });
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setForm(p => ({ ...p, [k]: e.target.value }));
+
+  function handleStart() {
+    if (!form.name.trim() || !form.complaint.trim()) return;
+    const patient: Patient = {
+      id: `p-intake-${Date.now()}`,
+      name: form.name.trim(),
+      age: parseInt(form.age) || 0,
+      dateOfBirth: form.dob || new Date().toISOString().slice(0, 10),
+      insuranceProvider: form.insurance || "Self-Pay",
+      insurancePlan: form.plan || null,
+      primaryComplaint: form.complaint.trim(),
+      hpiPreview: form.hpi || `Patient presenting with ${form.complaint.trim()}.`,
+      medicalHistory: form.history.split(",").map(s => s.trim()).filter(Boolean),
+      medications: form.meds.split(",").map(s => s.trim()).filter(Boolean),
+      allergies: form.allergies.split(",").map(s => s.trim()).filter(Boolean),
+      valueScore: 80, paymentReliability: 85, noShowRate: 0, revenuePerVisit: 175,
+    };
+    const apt: Appointment = {
+      id: `a-intake-${Date.now()}`,
+      patientId: patient.id,
+      providerId: sampleProvider.id,
+      appointmentTime: new Date().toISOString(),
+      visitType: "urgent-care",
+      status: "checked-in",
+      preVisitComplete: false,
+      scopeStatus: "clear",
+      insuranceVerified: form.insurance !== "Self-Pay",
+      estimatedRevenue: "$175",
+    };
+    onStart(patient, apt);
+  }
+
+  const field = (label: string, k: keyof typeof form, placeholder: string, type = "text") => (
+    <div>
+      <label className="text-xs text-gray-400 font-semibold block mb-1">{label}</label>
+      <input type={type} value={form[k]} onChange={set(k)} placeholder={placeholder}
+        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-teal-500" />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+          <div>
+            <h3 className="font-extrabold text-white">➕ Quick Patient Intake</h3>
+            <p className="text-xs text-gray-500 mt-0.5">AI chart pre-generates immediately on start</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none">✕</button>
+        </div>
+        <div className="p-5 space-y-3 overflow-y-auto" style={{ maxHeight: "65vh" }}>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">{field("Patient Name *", "name", "First Last")}</div>
+            {field("Age", "age", "e.g. 45", "number")}
+            {field("Date of Birth", "dob", "YYYY-MM-DD", "date")}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-400 font-semibold block mb-1">Insurance</label>
+              <select value={form.insurance} onChange={set("insurance")}
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500">
+                {["Self-Pay", "Medicare", "Medi-Cal", "Blue Shield", "Anthem", "UnitedHealth", "Aetna", "Cigna", "Kaiser", "Covered CA", "Other"].map(i => <option key={i}>{i}</option>)}
+              </select>
+            </div>
+            {field("Plan / Group #", "plan", "e.g. PPO Gold")}
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 font-semibold block mb-1">Chief Complaint *</label>
+            <input type="text" value={form.complaint} onChange={set("complaint")} placeholder="e.g. Chest pain, Sore throat, Abdominal pain"
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-teal-500" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 font-semibold block mb-1">HPI / Intake Notes</label>
+            <textarea value={form.hpi} onChange={set("hpi")} placeholder="Onset, duration, character, radiation, associated symptoms, modifying factors…" rows={2}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-teal-500 resize-none" />
+          </div>
+          <div className="grid grid-cols-1 gap-3">
+            {field("PMH — Medical History", "history", "HTN, DM2, Asthma (comma separated)")}
+            {field("Current Medications", "meds", "Metformin 1000mg, Lisinopril 10mg (comma separated)")}
+            {field("Allergies", "allergies", "NKDA or Penicillin, Sulfa (comma separated)")}
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-gray-800 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 hover:text-white text-sm transition-colors">
+            Cancel
+          </button>
+          <button onClick={handleStart} disabled={!form.name.trim() || !form.complaint.trim()}
+            className="flex-2 flex-1 py-3 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-sm font-extrabold transition-colors flex items-center justify-center gap-2">
+            🚀 Start Encounter — Generate Chart
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function DashboardHome({ onOpenEncounter, pregenStatus }: { onOpenEncounter: (patient: Patient, apt: Appointment) => void; pregenStatus: Record<string, "loading" | "ready" | "error"> }) {
@@ -206,6 +308,7 @@ export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [now, setNow] = useState(new Date());
   const [encounterCtx, setEncounterCtx] = useState<{ patient: Patient; apt: Appointment } | null>(null);
+  const [showIntake, setShowIntake] = useState(false);
 
   // Pre-generate care plans for all today's patients as soon as dashboard loads
   const pregenCache = useRef<Record<string, CarePlan>>({});
@@ -371,6 +474,13 @@ export default function DashboardPage() {
           {/* Right */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
+              onClick={() => setShowIntake(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+            >
+              <span>➕</span>
+              <span className="hidden sm:inline">New Patient</span>
+            </button>
+            <button
               onClick={() => setRecording(r => !r)}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
@@ -383,6 +493,14 @@ export default function DashboardPage() {
             <span className="text-gray-400 text-xs hidden lg:block truncate max-w-32">{sampleProvider.name}</span>
           </div>
         </div>
+
+        {/* Quick intake modal */}
+        {showIntake && (
+          <QuickIntakeModal
+            onStart={(patient, apt) => { setShowIntake(false); setEncounterCtx({ patient, apt }); }}
+            onClose={() => setShowIntake(false)}
+          />
+        )}
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto bg-gray-950">
@@ -407,6 +525,7 @@ export default function DashboardPage() {
           {!encounterCtx && activeTab === "patients" && <PatientsTab />}
           {!encounterCtx && activeTab === "appointments" && <AppointmentsTab />}
           {!encounterCtx && activeTab === "lab-review" && <LabReviewTab />}
+          {!encounterCtx && activeTab === "radiology" && <RadiologyTab />}
           {!encounterCtx && activeTab === "ehr" && <EhrIntegrationTab />}
           {!encounterCtx && activeTab === "settings" && <SettingsTab />}
         </main>
