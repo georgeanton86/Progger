@@ -2,11 +2,24 @@
 import { useState, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type CarePlanOption = {
+  confidence: number;
+  label: string;
+  icd10?: string;
+  action: string;
+  disposition: "outpatient" | "ED" | "admit" | "observation";
+  followUp: string;
+  referral: string | null;
+};
+
 type RadiologyFinding = {
   system: string;
   finding: string;
   abnormal: boolean;
   severity: "normal" | "mild" | "moderate" | "severe" | "critical";
+  differentials?: CarePlanOption[];
 };
 
 type ICD10Entry = { code: string; description: string };
@@ -43,12 +56,13 @@ type DocumentExtraction = {
 };
 
 // ── Image window/level presets ────────────────────────────────────────────────
+
 const PRESETS: Record<string, { brightness: number; contrast: number; inverted: boolean }> = {
-  "Standard":     { brightness: 100, contrast: 100, inverted: false },
-  "Lung Window":  { brightness: 72,  contrast: 240, inverted: false },
-  "Bone Window":  { brightness: 145, contrast: 165, inverted: false },
-  "Soft Tissue":  { brightness: 118, contrast: 128, inverted: false },
-  "Film (−)":     { brightness: 100, contrast: 110, inverted: true  },
+  "Standard":    { brightness: 100, contrast: 100, inverted: false },
+  "Lung Window": { brightness: 72,  contrast: 240, inverted: false },
+  "Bone Window": { brightness: 145, contrast: 165, inverted: false },
+  "Soft Tissue": { brightness: 118, contrast: 128, inverted: false },
+  "Film (−)":    { brightness: 100, contrast: 110, inverted: true  },
 };
 
 const MODALITIES = [
@@ -73,7 +87,8 @@ const MODALITIES = [
   "Other / Auto-detect",
 ];
 
-// ── Utility: parse AI JSON response ──────────────────────────────────────────
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
 function parseJSON<T>(text: string): T | null {
   const start = text.indexOf("{");
   if (start === -1) return null;
@@ -86,7 +101,30 @@ function parseJSON<T>(text: string): T | null {
   return null;
 }
 
+function dispositionColor(d: CarePlanOption["disposition"]) {
+  if (d === "admit")       return "bg-red-900/40 border-red-700/50 text-red-300";
+  if (d === "ED")          return "bg-orange-900/40 border-orange-700/50 text-orange-300";
+  if (d === "observation") return "bg-amber-900/40 border-amber-700/50 text-amber-300";
+  return "bg-green-900/30 border-green-700/40 text-green-300";
+}
+
+function copyCarePlan(opt: CarePlanOption, finding: RadiologyFinding) {
+  const text = [
+    `FINDING: ${finding.system} — ${finding.finding}`,
+    `DIFFERENTIAL: ${opt.label}${opt.icd10 ? ` (${opt.icd10})` : ""} — ${opt.confidence}% confidence`,
+    ``,
+    `TREATMENT: ${opt.action}`,
+    `DISPOSITION: ${opt.disposition.toUpperCase()}`,
+    `FOLLOW-UP: ${opt.followUp}`,
+    opt.referral ? `REFERRAL: ${opt.referral}` : "",
+    ``,
+    `— rAIdiology™ · PrognoSX · NOT interpreted by a board-certified radiologist. Clinical decision support only.`,
+  ].filter(Boolean).join("\n");
+  navigator.clipboard?.writeText(text).catch(() => {});
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
+
 function UrgencyBadge({ urgency }: { urgency: "routine" | "urgent" | "emergent" }) {
   return (
     <span className={cn(
@@ -100,14 +138,17 @@ function UrgencyBadge({ urgency }: { urgency: "routine" | "urgent" | "emergent" 
   );
 }
 
-function ConfidenceMeter({ value }: { value: number }) {
-  const color = value >= 85 ? "bg-green-500" : value >= 70 ? "bg-amber-500" : "bg-red-500";
+function ConfidenceMeter({ value, size = "md" }: { value: number; size?: "sm" | "md" }) {
+  const color = value >= 80 ? "bg-green-500" : value >= 60 ? "bg-amber-500" : "bg-gray-500";
+  const h = size === "sm" ? "h-1" : "h-1.5";
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-        <div className={cn("h-full rounded-full transition-all duration-700", color)} style={{ width: `${value}%` }} />
+    <div className="flex items-center gap-2">
+      <div className={cn("flex-1 bg-gray-800 rounded-full overflow-hidden", h)}>
+        <div className={cn("h-full rounded-full transition-all duration-500", color)} style={{ width: `${value}%` }} />
       </div>
-      <span className="text-xs text-gray-400 font-mono w-10 text-right">{value}%</span>
+      <span className={cn("font-mono font-bold flex-shrink-0", size === "sm" ? "text-xs w-8" : "text-xs w-10 text-right",
+        value >= 80 ? "text-green-400" : value >= 60 ? "text-amber-400" : "text-gray-500"
+      )}>{value}%</span>
     </div>
   );
 }
@@ -122,43 +163,173 @@ function SeverityDot({ severity }: { severity: RadiologyFinding["severity"] }) {
   return <div className={cn("w-2 h-2 rounded-full flex-shrink-0 mt-1.5", color)} />;
 }
 
+function DisclaimerBanner() {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div className="mx-4 mt-3 p-3.5 rounded-xl bg-amber-950/40 border border-amber-600/40 flex gap-3 flex-shrink-0">
+      <span className="text-amber-500 text-lg flex-shrink-0 mt-0.5">⚠</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-extrabold text-amber-400 mb-1">rAIdiology™ — Clinical Decision Support Only</p>
+        <p className="text-xs text-amber-500/80 leading-relaxed">
+          rAIdiology™ is <strong className="text-amber-400">NOT a board-certified radiologist</strong> and does not constitute a formal radiology report.
+          All AI-generated findings are preliminary screening aids only. Images must be reviewed and interpreted by a licensed radiologist or
+          qualified physician before any clinical action. Do not rely solely on this tool for diagnosis, treatment, or discharge decisions.
+          Findings may be incomplete, inaccurate, or miss life-threatening pathology.
+        </p>
+      </div>
+      <button onClick={() => setDismissed(true)} className="text-amber-700 hover:text-amber-400 text-lg flex-shrink-0 leading-none" title="Dismiss">✕</button>
+    </div>
+  );
+}
+
+// Expandable care plan card per finding
+function FindingCard({ finding }: { finding: RadiologyFinding }) {
+  const [expanded, setExpanded] = useState(false);
+  const [openOption, setOpenOption] = useState<number | null>(null);
+  const [copied, setCopied] = useState<number | null>(null);
+  const hasDifferentials = (finding.differentials?.length ?? 0) > 0;
+
+  const handleCopy = (i: number, opt: CarePlanOption) => {
+    copyCarePlan(opt, finding);
+    setCopied(i);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  return (
+    <div className={cn(
+      "rounded-xl border overflow-hidden",
+      finding.severity === "critical" ? "border-red-700/60 bg-red-950/30" :
+      finding.severity === "severe"   ? "border-red-700/30 bg-red-950/10" :
+      finding.severity === "moderate" ? "border-amber-700/30 bg-amber-950/10" :
+      finding.severity === "mild"     ? "border-amber-700/20 bg-amber-950/5" :
+      "border-gray-800/80 bg-gray-900/20"
+    )}>
+      {/* Finding header */}
+      <button
+        className="w-full flex items-start gap-3 p-2.5 text-left"
+        onClick={() => hasDifferentials && setExpanded(e => !e)}
+        disabled={!hasDifferentials}
+      >
+        <SeverityDot severity={finding.severity} />
+        <div className="flex-1 min-w-0">
+          <span className="text-xs font-extrabold text-gray-400 uppercase mr-1.5">{finding.system}:</span>
+          <span className="text-sm text-gray-200">{finding.finding}</span>
+        </div>
+        {hasDifferentials && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs text-blue-400 font-semibold">{finding.differentials!.length} Dx</span>
+            <span className={cn("text-gray-500 text-xs transition-transform duration-200", expanded && "rotate-180")}>▾</span>
+          </div>
+        )}
+      </button>
+
+      {/* Differential care plan options */}
+      {expanded && hasDifferentials && (
+        <div className="border-t border-gray-800/60 divide-y divide-gray-800/40">
+          {finding.differentials!.map((opt, i) => (
+            <div key={i} className="bg-gray-950/60">
+              {/* Option header — tappable */}
+              <button
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-800/30 transition-colors"
+                onClick={() => setOpenOption(openOption === i ? null : i)}
+              >
+                <div className="flex-1 min-w-0 space-y-1">
+                  <p className="text-sm font-bold text-white leading-tight">{opt.label}</p>
+                  <ConfidenceMeter value={opt.confidence} size="sm" />
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {opt.icd10 && <span className="font-mono text-xs text-teal-500">{opt.icd10}</span>}
+                  <span className={cn("text-gray-500 text-xs transition-transform duration-200", openOption === i && "rotate-180")}>▾</span>
+                </div>
+              </button>
+
+              {/* Expanded care plan */}
+              {openOption === i && (
+                <div className="px-3 pb-3 space-y-2.5">
+                  {/* Disposition badge */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={cn("text-xs font-extrabold uppercase px-2.5 py-1 rounded-full border", dispositionColor(opt.disposition))}>
+                      {opt.disposition === "ED" ? "🚑 Send to ED" :
+                       opt.disposition === "admit" ? "🏥 Admit" :
+                       opt.disposition === "observation" ? "👁 Observation" :
+                       "🏠 Outpatient"}
+                    </span>
+                    {opt.referral && (
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-purple-900/30 border border-purple-700/40 text-purple-300 font-semibold">
+                        Refer: {opt.referral}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Treatment */}
+                  <div className="p-2.5 rounded-lg bg-blue-950/25 border border-blue-700/30">
+                    <p className="text-xs font-extrabold text-blue-400 uppercase tracking-wide mb-1">Treatment</p>
+                    <p className="text-sm text-gray-200 leading-relaxed">{opt.action}</p>
+                  </div>
+
+                  {/* Follow-up */}
+                  <div className="p-2.5 rounded-lg bg-gray-800/50 border border-gray-700/40">
+                    <p className="text-xs font-extrabold text-gray-400 uppercase tracking-wide mb-1">Follow-up</p>
+                    <p className="text-sm text-gray-300 leading-relaxed">{opt.followUp}</p>
+                  </div>
+
+                  {/* Copy plan button */}
+                  <button
+                    onClick={() => handleCopy(i, opt)}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-gray-400 transition-colors"
+                  >
+                    {copied === i ? "✓ Copied!" : "📋 Copy Plan"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
+
 export function RadiologyTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const docInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef  = useRef<HTMLInputElement>(null);
 
   // Image state
-  const [imageUrl, setImageUrl]       = useState<string | null>(null);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [mediaType, setMediaType]     = useState("image/jpeg");
-  const [dragging, setDragging]       = useState(false);
+  const [imageUrl, setImageUrl]           = useState<string | null>(null);
+  const [imageBase64, setImageBase64]     = useState<string | null>(null);
+  const [mediaType, setMediaType]         = useState("image/jpeg");
+  const [dragging, setDragging]           = useState(false);
   const [imageFileName, setImageFileName] = useState("");
 
   // Enhancement controls
-  const [brightness, setBrightness]   = useState(100);
-  const [contrast, setContrast]       = useState(100);
-  const [inverted, setInverted]       = useState(false);
-  const [zoom, setZoom]               = useState(100);
+  const [brightness, setBrightness]     = useState(100);
+  const [contrast, setContrast]         = useState(100);
+  const [inverted, setInverted]         = useState(false);
+  const [zoom, setZoom]                 = useState(100);
   const [activePreset, setActivePreset] = useState("Standard");
 
   // Clinical context
-  const [modality, setModality]               = useState(MODALITIES[0]);
-  const [patientAge, setPatientAge]           = useState("");
-  const [patientSex, setPatientSex]           = useState("Unknown");
-  const [clinicalQuestion, setClinicalQuestion] = useState("");
-  const [clinicalContext, setClinicalContext] = useState("");
+  const [modality, setModality]                   = useState(MODALITIES[0]);
+  const [patientAge, setPatientAge]               = useState("");
+  const [patientSex, setPatientSex]               = useState("Unknown");
+  const [clinicalQuestion, setClinicalQuestion]   = useState("");
+  const [clinicalContext, setClinicalContext]     = useState("");
 
   // AI state
-  const [analyzing, setAnalyzing]     = useState(false);
-  const [report, setReport]           = useState<RadiologyReport | null>(null);
-  const [error, setError]             = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [report, setReport]       = useState<RadiologyReport | null>(null);
+  const [error, setError]         = useState<string | null>(null);
 
   // Document attachment state
-  const [docLoading, setDocLoading]   = useState(false);
-  const [docResult, setDocResult]     = useState<DocumentExtraction | null>(null);
-  const [docError, setDocError]       = useState<string | null>(null);
+  const [docLoading, setDocLoading] = useState(false);
+  const [docResult, setDocResult]   = useState<DocumentExtraction | null>(null);
+  const [docError, setDocError]     = useState<string | null>(null);
 
   // ── File loading ────────────────────────────────────────────────────────────
+
   const loadFile = useCallback((file: File) => {
     if (file.size > 5 * 1024 * 1024) {
       setError("Image too large — max 5MB. Try compressing or screenshotting the image.");
@@ -167,8 +338,7 @@ export function RadiologyTab() {
     setReport(null);
     setError(null);
     setImageFileName(file.name);
-    const mt = file.type || "image/jpeg";
-    setMediaType(mt);
+    setMediaType(file.type || "image/jpeg");
     const reader = new FileReader();
     reader.onload = e => {
       const dataUrl = e.target?.result as string;
@@ -195,6 +365,7 @@ export function RadiologyTab() {
   };
 
   // ── Radiology analysis ──────────────────────────────────────────────────────
+
   const analyze = async () => {
     if (!imageBase64) return;
     setAnalyzing(true);
@@ -221,8 +392,9 @@ export function RadiologyTab() {
   };
 
   // ── Document extraction ─────────────────────────────────────────────────────
+
   const extractDocument = async (file: File) => {
-    if (file.size > 5 * 1024 * 1024) { setDocError("File too large"); return; }
+    if (file.size > 5 * 1024 * 1024) { setDocError("File too large — max 5MB"); return; }
     setDocLoading(true);
     setDocError(null);
     setDocResult(null);
@@ -241,8 +413,8 @@ export function RadiologyTab() {
         const parsed = parseJSON<DocumentExtraction>(d.reply);
         if (!parsed) throw new Error("Could not parse extraction");
         setDocResult(parsed);
-      } catch (e) {
-        setDocError(e instanceof Error ? e.message : "Extraction failed");
+      } catch (err) {
+        setDocError(err instanceof Error ? err.message : "Extraction failed");
       } finally {
         setDocLoading(false);
       }
@@ -250,27 +422,35 @@ export function RadiologyTab() {
     reader.readAsDataURL(file);
   };
 
+  // ── Copy full report ────────────────────────────────────────────────────────
+
   const copyReport = () => {
     if (!report) return;
     const lines = [
-      "RADIOLOGY REPORT — PredictaChart™ / PrognoSX",
+      "rAIdiology™ PRELIMINARY READ — PrognoSX",
+      "⚠ NOT interpreted by a board-certified radiologist. Clinical decision support only.",
+      "",
       `Modality: ${report.detectedModality}`,
       `Quality: ${report.quality}`,
       report.technique ? `Technique: ${report.technique}` : "",
-      "",
-      "FINDINGS:",
-      ...report.findings.map(f => `${f.system}: ${f.finding}`),
+      `Urgency: ${report.urgency.toUpperCase()} | AI Confidence: ${report.confidence}%`,
       "",
       "IMPRESSION:",
       report.impression,
       "",
-      report.criticalFindings.length > 0 ? `CRITICAL FINDINGS:\n${report.criticalFindings.join("\n")}` : "",
-      `Urgency: ${report.urgency.toUpperCase()} | AI Confidence: ${report.confidence}%`,
+      ...(report.criticalFindings.length > 0 ? ["CRITICAL FINDINGS:", ...report.criticalFindings, ""] : []),
+      "SYSTEMATIC FINDINGS:",
+      ...report.findings.map(f => {
+        const line = `${f.system}: ${f.finding}`;
+        if (!f.differentials?.length) return line;
+        const dxLines = f.differentials.map(d => `  → ${d.confidence}% ${d.label}${d.icd10 ? ` (${d.icd10})` : ""} | ${d.action}`);
+        return [line, ...dxLines].join("\n");
+      }),
       "",
       "RECOMMENDATIONS:",
       ...report.recommendations,
       "",
-      report.limitations || "AI-assisted preliminary read. Radiologist verification required.",
+      report.limitations || "Requires radiologist verification before clinical decisions.",
     ].filter(l => l !== undefined).join("\n");
     navigator.clipboard?.writeText(lines).catch(() => {});
   };
@@ -279,7 +459,20 @@ export function RadiologyTab() {
     flag === "critical" ? "text-red-400 font-extrabold" :
     flag === "high" || flag === "low" ? "text-amber-400 font-bold" : "text-green-400";
 
+  const clearStudy = () => {
+    setImageUrl(null);
+    setImageBase64(null);
+    setReport(null);
+    setError(null);
+    setBrightness(100);
+    setContrast(100);
+    setInverted(false);
+    setZoom(100);
+    setActivePreset("Standard");
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
     <div className="flex flex-col h-full bg-gray-950 overflow-hidden">
 
@@ -287,13 +480,12 @@ export function RadiologyTab() {
       <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 flex-shrink-0 flex-wrap gap-2">
         <div>
           <h1 className="text-base font-extrabold text-white flex items-center gap-2">
-            🔬 Radiology AI Studio
+            🩻 r<span className="text-blue-400">AI</span>diology™
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-400 border border-blue-700/30">BETA</span>
           </h1>
-          <p className="text-xs text-gray-500 mt-0.5">AI-assisted preliminary reads using claude-sonnet · Always verify with radiologist before clinical action</p>
+          <p className="text-xs text-gray-500 mt-0.5">AI-assisted preliminary reads · Confidence-graded differentials · Always verify with radiologist</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Smart Document Extract button */}
           <button
             onClick={() => docInputRef.current?.click()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800/50 text-gray-400 hover:text-white hover:border-gray-500 text-xs font-medium transition-colors"
@@ -301,9 +493,10 @@ export function RadiologyTab() {
           >
             📎 Extract Document
           </button>
-          <input ref={docInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) extractDocument(f); }} />
+          <input ref={docInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) extractDocument(f); e.target.value = ""; }} />
           {imageUrl && (
-            <button onClick={() => { setImageUrl(null); setImageBase64(null); setReport(null); setError(null); setBrightness(100); setContrast(100); setInverted(false); setZoom(100); setActivePreset("Standard"); }}
+            <button onClick={clearStudy}
               className="text-xs text-gray-500 hover:text-white px-3 py-1.5 rounded-lg border border-gray-700 hover:border-gray-500 transition-colors">
               New Study
             </button>
@@ -324,7 +517,11 @@ export function RadiologyTab() {
           {docResult && !docLoading && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-bold text-teal-400">{docResult.documentType || "Document"} extracted{docResult.facility ? ` — ${docResult.facility}` : ""}{docResult.dateOnDocument ? ` · ${docResult.dateOnDocument}` : ""}</p>
+                <p className="text-xs font-bold text-teal-400">
+                  {docResult.documentType || "Document"} extracted
+                  {docResult.facility ? ` — ${docResult.facility}` : ""}
+                  {docResult.dateOnDocument ? ` · ${docResult.dateOnDocument}` : ""}
+                </p>
                 <button onClick={() => setDocResult(null)} className="text-xs text-gray-600 hover:text-white">✕ Dismiss</button>
               </div>
               <div className="flex flex-wrap gap-2 text-xs">
@@ -338,7 +535,9 @@ export function RadiologyTab() {
                           <span className={cn("flex-shrink-0 font-mono", flagColor(l.flag))}>{l.value} {l.unit}</span>
                         </div>
                       ))}
-                      {docResult.labs!.length > 8 && <p className="text-gray-600 col-span-2 text-center py-1">+{docResult.labs!.length - 8} more</p>}
+                      {docResult.labs!.length > 8 && (
+                        <p className="text-gray-600 col-span-2 text-center py-1">+{docResult.labs!.length - 8} more</p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -356,8 +555,11 @@ export function RadiologyTab() {
                   <div className="flex-1 min-w-40">
                     <p className="text-gray-500 font-semibold mb-1">Diagnoses</p>
                     <div className="space-y-0.5">
-                      {docResult.diagnoses!.map((d, i) => (
-                        <p key={i} className="text-gray-300 bg-gray-800 rounded px-2 py-1">{d.code ? <span className="font-mono text-teal-400 mr-1.5">{d.code}</span> : null}{d.description}</p>
+                      {docResult.diagnoses!.map((dx, i) => (
+                        <p key={i} className="text-gray-300 bg-gray-800 rounded px-2 py-1">
+                          {dx.code && <span className="font-mono text-teal-400 mr-1.5">{dx.code}</span>}
+                          {dx.description}
+                        </p>
                       ))}
                     </div>
                   </div>
@@ -367,7 +569,9 @@ export function RadiologyTab() {
                     <p className="text-gray-500 font-semibold mb-1">Insurance</p>
                     <div className="space-y-0.5">
                       {Object.entries(docResult.insuranceInfo!).map(([k, v]) => (
-                        <p key={k} className="text-gray-300 bg-gray-800 rounded px-2 py-1"><span className="text-gray-500">{k}: </span>{v}</p>
+                        <p key={k} className="text-gray-300 bg-gray-800 rounded px-2 py-1">
+                          <span className="text-gray-500">{k}: </span>{v}
+                        </p>
                       ))}
                     </div>
                   </div>
@@ -380,11 +584,6 @@ export function RadiologyTab() {
                   ))}
                 </div>
               )}
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => { if (docResult) navigator.clipboard?.writeText(JSON.stringify(docResult, null, 2)).catch(() => {}); }} className="text-xs px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors">
-                  📋 Copy JSON
-                </button>
-              </div>
             </div>
           )}
         </div>
@@ -394,7 +593,7 @@ export function RadiologyTab() {
       <div className="flex flex-1 overflow-hidden">
         {!imageUrl ? (
           // ── Upload zone ──────────────────────────────────────────────────────
-          <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center p-6 gap-6">
+          <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center p-6 gap-5">
             <div
               onDragOver={e => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
@@ -410,9 +609,10 @@ export function RadiologyTab() {
               <div className="text-center">
                 <p className="text-white font-extrabold text-2xl">Drop imaging here</p>
                 <p className="text-gray-400 text-base mt-1">or click to upload</p>
-                <p className="text-gray-600 text-sm mt-2">JPEG · PNG · WebP · max 5MB · Works with X-rays, CT screenshots, MRI, ultrasound, and photos of physical films</p>
+                <p className="text-gray-600 text-sm mt-2">JPEG · PNG · WebP · max 5MB · X-rays, CT, MRI, ultrasound, physical films</p>
               </div>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) loadFile(f); }} />
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) loadFile(f); }} />
             </div>
 
             {error && (
@@ -425,8 +625,8 @@ export function RadiologyTab() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl">
               {[
                 { icon: "🫁", title: "Chest X-Ray", desc: "ABCDE systematic · pneumonia · pneumothorax · effusion · cardiomegaly" },
-                { icon: "🦴", title: "MSK & Fractures", desc: "Ottawa rules · alignment · cortical integrity · soft tissue" },
-                { icon: "🧠", title: "CT Head/Spine", desc: "Hemorrhage · mass · ischemia · midline shift · fractures" },
+                { icon: "🦴", title: "MSK & Fractures", desc: "Ottawa rules · alignment · cortical integrity · soft tissue · growth plates" },
+                { icon: "🧠", title: "CT Head/Spine", desc: "Hemorrhage · mass · ischemia · midline shift · cord compression" },
                 { icon: "🔊", title: "Ultrasound / Echo", desc: "DVT · AAA · hepatobiliary · EF · wall motion · valves" },
               ].map(c => (
                 <div key={c.title} className="bg-gray-900 border border-gray-800 rounded-xl p-3">
@@ -437,8 +637,14 @@ export function RadiologyTab() {
               ))}
             </div>
 
-            <div className="w-full max-w-2xl p-3.5 rounded-xl bg-amber-900/10 border border-amber-700/20 text-center">
-              <p className="text-xs text-amber-500/80">⚠ Clinical Decision Support Only — AI analysis is a preliminary screening aid. All findings must be reviewed by a licensed radiologist or physician before clinical action.</p>
+            {/* Disclaimer box */}
+            <div className="w-full max-w-2xl p-4 rounded-xl bg-amber-950/20 border border-amber-700/30 space-y-1.5">
+              <p className="text-xs font-extrabold text-amber-400">⚠ rAIdiology™ Legal Disclaimer</p>
+              <p className="text-xs text-amber-500/80 leading-relaxed">
+                rAIdiology™ is an AI clinical decision support tool and is <strong className="text-amber-400">NOT a substitute for formal radiology interpretation</strong> by a board-certified radiologist.
+                Results are preliminary screening aids only. All findings must be independently verified by a licensed physician or radiologist before any clinical action, treatment, or discharge decision.
+                This tool may miss critical findings. Use with clinical judgment and professional guidance only.
+              </p>
             </div>
           </div>
         ) : (
@@ -463,13 +669,11 @@ export function RadiologyTab() {
                     transition: "filter 0.15s, transform 0.15s",
                   }}
                 />
-                {/* Urgency overlay */}
                 {report?.urgency && report.urgency !== "routine" && (
                   <div className="absolute top-3 right-3 pointer-events-none">
                     <UrgencyBadge urgency={report.urgency} />
                   </div>
                 )}
-                {/* Filename chip */}
                 <div className="absolute bottom-2 left-2 pointer-events-none">
                   <span className="text-xs text-gray-600 bg-black/60 px-2 py-0.5 rounded">{imageFileName}</span>
                 </div>
@@ -477,7 +681,6 @@ export function RadiologyTab() {
 
               {/* Enhancement controls */}
               <div className="bg-gray-950 border-t border-gray-800 p-3 flex-shrink-0 space-y-2.5">
-                {/* Presets */}
                 <div className="flex gap-1 flex-wrap">
                   {Object.keys(PRESETS).map(p => (
                     <button key={p} onClick={() => applyPreset(p)} className={cn(
@@ -486,7 +689,6 @@ export function RadiologyTab() {
                     )}>{p}</button>
                   ))}
                 </div>
-                {/* Sliders */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Brightness <span className="text-gray-400">{brightness}%</span></p>
@@ -502,7 +704,8 @@ export function RadiologyTab() {
                     <p className="text-xs text-gray-600 mb-1">Zoom <span className="text-gray-400">{zoom}%</span></p>
                     <input type="range" min="25" max="500" value={zoom} onChange={e => setZoom(Number(e.target.value))} className="w-full h-1.5 accent-teal-500" />
                   </div>
-                  <button onClick={() => { applyPreset("Standard"); setZoom(100); }} className="text-xs text-gray-600 hover:text-white px-2.5 py-1.5 rounded-lg border border-gray-700 hover:border-gray-500 flex-shrink-0 transition-colors">
+                  <button onClick={() => { applyPreset("Standard"); setZoom(100); }}
+                    className="text-xs text-gray-600 hover:text-white px-2.5 py-1.5 rounded-lg border border-gray-700 hover:border-gray-500 flex-shrink-0 transition-colors">
                     Reset
                   </button>
                 </div>
@@ -567,12 +770,12 @@ export function RadiologyTab() {
 
                   <button onClick={analyze} disabled={!imageBase64}
                     className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-extrabold text-sm transition-colors flex items-center justify-center gap-2.5 shadow-lg shadow-blue-900/30">
-                    🔬 Analyze with AI
+                    🩻 Analyze with r<span className="text-blue-200">AI</span>diology™
                   </button>
 
                   <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-700/20">
                     <p className="text-xs text-amber-500/70 leading-relaxed">
-                      ⚠ <strong className="text-amber-400">AI Disclaimer:</strong> This is a clinical decision support tool only. AI reads carry higher error rates than board-certified radiologists, particularly for subtle findings, pediatric imaging, and rare conditions. All findings must be verified by a licensed radiologist before clinical action. Not for standalone diagnostic use.
+                      ⚠ <strong className="text-amber-400">rAIdiology™ Disclaimer:</strong> AI reads are a clinical decision support tool only. NOT a formal radiology report. All findings require verification by a board-certified radiologist or licensed physician before clinical action.
                     </p>
                   </div>
                 </div>
@@ -583,147 +786,145 @@ export function RadiologyTab() {
                   <div className="relative w-20 h-20">
                     <div className="absolute inset-0 rounded-full border-4 border-blue-900/40 border-t-blue-400 animate-spin" />
                     <div className="absolute inset-2 rounded-full border-4 border-blue-900/20 border-b-blue-500/60 animate-spin" style={{ animationDirection: "reverse", animationDuration: "1.8s" }} />
-                    <div className="absolute inset-0 flex items-center justify-center text-3xl">🔬</div>
+                    <div className="absolute inset-0 flex items-center justify-center text-3xl">🩻</div>
                   </div>
                   <div className="text-center">
-                    <p className="text-white font-extrabold text-lg">Analyzing imaging…</p>
-                    <p className="text-gray-500 text-sm mt-1.5">Applying systematic radiological review</p>
+                    <p className="text-white font-extrabold text-lg">r<span className="text-blue-400">AI</span>diology™ analyzing…</p>
+                    <p className="text-gray-500 text-sm mt-1.5">Systematic review · Differential generation · Care plan building</p>
                     <p className="text-gray-600 text-xs mt-1">ABCDE · Evidence-based criteria · Critical finding detection</p>
                   </div>
                 </div>
 
               ) : report ? (
                 // ── Report display ──────────────────────────────────────────────
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto">
+                  <DisclaimerBanner />
 
-                  {/* Report header */}
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div>
-                      <h3 className="font-extrabold text-white text-base leading-tight">{report.detectedModality}</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">{report.quality}</p>
-                      {report.technique && <p className="text-xs text-gray-600 mt-0.5">{report.technique}</p>}
+                  <div className="p-4 space-y-4">
+
+                    {/* Report header */}
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <h3 className="font-extrabold text-white text-base leading-tight">{report.detectedModality}</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">{report.quality}</p>
+                        {report.technique && <p className="text-xs text-gray-600 mt-0.5">{report.technique}</p>}
+                      </div>
+                      <UrgencyBadge urgency={report.urgency} />
                     </div>
-                    <UrgencyBadge urgency={report.urgency} />
-                  </div>
 
-                  {/* AI Confidence */}
-                  <div className="p-3 bg-gray-900/60 rounded-xl border border-gray-800">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-bold text-gray-400">AI Confidence</span>
-                      <span className="text-xs text-gray-500">{report.radiologistReviewRequired ? "⚠ Radiologist review required" : "Preliminary read"}</span>
+                    {/* AI Confidence */}
+                    <div className="p-3 bg-gray-900/60 rounded-xl border border-gray-800">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold text-gray-400">Overall AI Confidence</span>
+                        <span className="text-xs text-gray-500">{report.radiologistReviewRequired ? "⚠ Radiologist review required" : "Preliminary read"}</span>
+                      </div>
+                      <ConfidenceMeter value={report.confidence} />
                     </div>
-                    <ConfidenceMeter value={report.confidence} />
-                  </div>
 
-                  {/* 🚨 Critical findings — always first */}
-                  {report.criticalFindings.length > 0 && (
-                    <div className="p-4 rounded-xl bg-red-950/50 border-2 border-red-600/70">
-                      <p className="text-sm font-extrabold text-red-300 mb-2">🚨 CRITICAL FINDINGS — Immediate action required</p>
-                      {report.criticalFindings.map((f, i) => (
-                        <p key={i} className="text-sm text-red-200 font-semibold flex items-start gap-2">
-                          <span className="text-red-500 mt-0.5 flex-shrink-0">▶</span>{f}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Impression */}
-                  <div className="p-4 rounded-xl bg-blue-950/25 border border-blue-700/40">
-                    <p className="text-xs font-extrabold text-blue-400 uppercase tracking-widest mb-2">Impression</p>
-                    <p className="text-sm text-gray-100 leading-relaxed whitespace-pre-line">{report.impression}</p>
-                  </div>
-
-                  {/* Systematic findings */}
-                  <div>
-                    <p className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-2">Systematic Findings</p>
-                    <div className="space-y-1.5">
-                      {report.findings.map((f, i) => (
-                        <div key={i} className={cn(
-                          "flex items-start gap-3 p-2.5 rounded-xl border",
-                          f.severity === "critical" ? "border-red-700/60 bg-red-950/30" :
-                          f.severity === "severe"   ? "border-red-700/30 bg-red-950/10" :
-                          f.severity === "moderate" ? "border-amber-700/30 bg-amber-950/10" :
-                          f.severity === "mild"     ? "border-amber-700/20 bg-amber-950/5" :
-                          "border-gray-800/80 bg-gray-900/20"
-                        )}>
-                          <SeverityDot severity={f.severity} />
-                          <div className="flex-1 min-w-0">
-                            <span className="text-xs font-extrabold text-gray-400 uppercase mr-1.5">{f.system}:</span>
-                            <span className="text-sm text-gray-200">{f.finding}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Recommendations */}
-                  {report.recommendations.length > 0 && (
-                    <div>
-                      <p className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-2">Recommendations</p>
-                      <div className="space-y-1.5">
-                        {report.recommendations.map((r, i) => (
-                          <p key={i} className="text-sm text-gray-300 flex items-start gap-2">
-                            <span className="text-teal-500 mt-0.5 flex-shrink-0">→</span>{r}
+                    {/* 🚨 Critical findings */}
+                    {report.criticalFindings.length > 0 && (
+                      <div className="p-4 rounded-xl bg-red-950/50 border-2 border-red-600/70">
+                        <p className="text-sm font-extrabold text-red-300 mb-2">🚨 CRITICAL FINDINGS — Immediate action required</p>
+                        {report.criticalFindings.map((f, i) => (
+                          <p key={i} className="text-sm text-red-200 font-semibold flex items-start gap-2">
+                            <span className="text-red-500 mt-0.5 flex-shrink-0">▶</span>{f}
                           </p>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Next imaging */}
-                  {report.nextImaging && (
-                    <div className="p-3 rounded-xl bg-purple-900/10 border border-purple-700/30">
-                      <p className="text-xs font-bold text-purple-400 mb-1">Next Imaging Step</p>
-                      <p className="text-sm text-gray-300">{report.nextImaging}</p>
+                    {/* Impression */}
+                    <div className="p-4 rounded-xl bg-blue-950/25 border border-blue-700/40">
+                      <p className="text-xs font-extrabold text-blue-400 uppercase tracking-widest mb-2">Impression</p>
+                      <p className="text-sm text-gray-100 leading-relaxed whitespace-pre-line">{report.impression}</p>
                     </div>
-                  )}
 
-                  {/* Correlate with */}
-                  {(report.correlateWith?.length ?? 0) > 0 && (
-                    <div className="p-3 bg-gray-900 rounded-xl border border-gray-800">
-                      <p className="text-xs font-bold text-gray-500 mb-1.5">Correlate With:</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {report.correlateWith!.map((c, i) => (
-                          <span key={i} className="text-xs px-2.5 py-1 bg-gray-800 border border-gray-700 rounded-full text-gray-300">{c}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ICD-10 codes */}
-                  {report.icd10Codes.length > 0 && (
+                    {/* Systematic findings with tappable care plans */}
                     <div>
-                      <p className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-2">ICD-10 Codes</p>
-                      <div className="flex flex-wrap gap-2">
-                        {report.icd10Codes.map((c, i) => (
-                          <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded-lg">
-                            <span className="font-mono text-xs font-bold text-teal-400">{c.code}</span>
-                            <span className="text-xs text-gray-400">{c.description}</span>
-                          </div>
+                      <p className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+                        Systematic Findings
+                        {report.findings.some(f => f.differentials?.length) && (
+                          <span className="ml-2 normal-case font-normal text-gray-600">— tap abnormal findings to see care plans</span>
+                        )}
+                      </p>
+                      <div className="space-y-1.5">
+                        {report.findings.map((f, i) => (
+                          <FindingCard key={i} finding={f} />
                         ))}
                       </div>
                     </div>
-                  )}
 
-                  {/* Limitations / disclaimer */}
-                  <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-700/20">
-                    <p className="text-xs text-amber-500/70 leading-relaxed">{report.limitations || "AI-assisted preliminary read. Requires radiologist verification before clinical decisions."}</p>
-                  </div>
+                    {/* Recommendations */}
+                    {report.recommendations.length > 0 && (
+                      <div>
+                        <p className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-2">Recommendations</p>
+                        <div className="space-y-1.5">
+                          {report.recommendations.map((r, i) => (
+                            <p key={i} className="text-sm text-gray-300 flex items-start gap-2">
+                              <span className="text-teal-500 mt-0.5 flex-shrink-0">→</span>{r}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                  {/* Action buttons */}
-                  <div className="flex gap-2 pb-6">
-                    <button onClick={copyReport}
-                      className="flex-1 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-semibold hover:bg-gray-800 transition-colors flex items-center justify-center gap-1.5">
-                      📋 Copy Report
-                    </button>
-                    <button onClick={() => window.print()}
-                      className="flex-1 py-3 rounded-xl border border-blue-700/50 bg-blue-900/20 text-blue-400 text-sm font-semibold hover:bg-blue-900/30 transition-colors flex items-center justify-center gap-1.5">
-                      🖨 Print
-                    </button>
-                    <button onClick={() => { setReport(null); setError(null); }}
-                      className="py-3 px-4 rounded-xl border border-gray-700 text-gray-500 text-sm hover:text-white hover:border-gray-500 transition-colors">
-                      Retry
-                    </button>
+                    {/* Next imaging */}
+                    {report.nextImaging && (
+                      <div className="p-3 rounded-xl bg-purple-900/10 border border-purple-700/30">
+                        <p className="text-xs font-bold text-purple-400 mb-1">Next Imaging Step</p>
+                        <p className="text-sm text-gray-300">{report.nextImaging}</p>
+                      </div>
+                    )}
+
+                    {/* Correlate with */}
+                    {(report.correlateWith?.length ?? 0) > 0 && (
+                      <div className="p-3 bg-gray-900 rounded-xl border border-gray-800">
+                        <p className="text-xs font-bold text-gray-500 mb-1.5">Correlate With:</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {report.correlateWith!.map((c, i) => (
+                            <span key={i} className="text-xs px-2.5 py-1 bg-gray-800 border border-gray-700 rounded-full text-gray-300">{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ICD-10 codes */}
+                    {report.icd10Codes.length > 0 && (
+                      <div>
+                        <p className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-2">ICD-10 Codes</p>
+                        <div className="flex flex-wrap gap-2">
+                          {report.icd10Codes.map((c, i) => (
+                            <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded-lg">
+                              <span className="font-mono text-xs font-bold text-teal-400">{c.code}</span>
+                              <span className="text-xs text-gray-400">{c.description}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Limitations / disclaimer */}
+                    <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-700/20">
+                      <p className="text-xs text-amber-500/70 leading-relaxed">
+                        ⚠ <strong className="text-amber-400">rAIdiology™</strong> — {report.limitations || "AI-assisted preliminary read. NOT a formal radiology report. Requires independent radiologist or physician verification before any clinical action."}
+                      </p>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2 pb-6">
+                      <button onClick={copyReport}
+                        className="flex-1 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-semibold hover:bg-gray-800 transition-colors flex items-center justify-center gap-1.5">
+                        📋 Copy Report
+                      </button>
+                      <button onClick={() => window.print()}
+                        className="flex-1 py-3 rounded-xl border border-blue-700/50 bg-blue-900/20 text-blue-400 text-sm font-semibold hover:bg-blue-900/30 transition-colors flex items-center justify-center gap-1.5">
+                        🖨 Print
+                      </button>
+                      <button onClick={() => { setReport(null); setError(null); }}
+                        className="py-3 px-4 rounded-xl border border-gray-700 text-gray-500 text-sm hover:text-white hover:border-gray-500 transition-colors">
+                        Retry
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : null}
