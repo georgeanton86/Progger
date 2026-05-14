@@ -13,6 +13,7 @@ import { EhrIntegrationTab } from "@/components/tabs/ehr-integration-tab";
 import { SettingsTab } from "@/components/tabs/settings-tab";
 import { LabReviewTab } from "@/components/tabs/lab-review-tab";
 import { RadiologyTab } from "@/components/tabs/radiology-tab";
+import { GrandRoundsTab } from "@/components/tabs/grand-rounds-tab";
 import { PatientAvatar, PatientHealthCard } from "@/components/patient-avatar";
 import { StreamlinedEncounter, buildCarePlanPrompt, parseCarePlanJSON, type CarePlan } from "@/components/encounter/streamlined-encounter";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,8 @@ const tabs = [
   { id: "dashboard", label: "Dashboard", icon: "⊙" },
   { id: "pre-visit", label: "Pre-Visit Charting", icon: "👤" },
   { id: "lab-review", label: "Lab Review", icon: "🧪" },
-  { id: "radiology", label: "Radiology AI Studio", icon: "🔬" },
+  { id: "radiology", label: "rAIdiology™", icon: "🩻" },
+  { id: "grand-rounds", label: "Grand Rounds AI", icon: "🏥" },
   { id: "scope", label: "Scope Validation", icon: "🛡" },
   { id: "care-planning", label: "Care Planning", icon: "✏️" },
   { id: "briefing", label: "Protective Briefing", icon: "📋" },
@@ -526,6 +528,7 @@ export default function DashboardPage() {
           {!encounterCtx && activeTab === "appointments" && <AppointmentsTab />}
           {!encounterCtx && activeTab === "lab-review" && <LabReviewTab />}
           {!encounterCtx && activeTab === "radiology" && <RadiologyTab />}
+          {!encounterCtx && activeTab === "grand-rounds" && <GrandRoundsTab />}
           {!encounterCtx && activeTab === "ehr" && <EhrIntegrationTab />}
           {!encounterCtx && activeTab === "settings" && <SettingsTab />}
         </main>
