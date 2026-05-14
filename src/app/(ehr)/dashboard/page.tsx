@@ -24,7 +24,7 @@ const tabs = [
   { id: "pre-visit", label: "Pre-Visit Charting", icon: "👤" },
   { id: "lab-review", label: "Lab Review", icon: "🧪" },
   { id: "radiology", label: "rAIdiology™", icon: "🩻" },
-  { id: "grand-rounds", label: "Grand Rounds AI", icon: "🏥" },
+  { id: "grand-rounds", label: "Grand Rounds AI™", icon: "🏥" },
   { id: "scope", label: "Scope Validation", icon: "🛡" },
   { id: "care-planning", label: "Care Planning", icon: "✏️" },
   { id: "briefing", label: "Protective Briefing", icon: "📋" },

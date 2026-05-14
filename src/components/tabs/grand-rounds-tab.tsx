@@ -405,7 +405,7 @@ export function GrandRoundsTab() {
       <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 flex-shrink-0 flex-wrap gap-2">
         <div>
           <h1 className="text-base font-extrabold text-white flex items-center gap-2">
-            🏥 Grand Rounds <span className="text-blue-400">AI</span>
+            🏥 Grand Rounds <span className="text-blue-400">AI</span>™
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-400 border border-blue-700/30">BETA</span>
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">Your AI specialty consult team · 12 board-equivalent specialists · Case-aware clinical reasoning</p>
@@ -481,7 +481,7 @@ export function GrandRoundsTab() {
               <div className="text-6xl select-none">🏥</div>
               <div>
                 <p className="text-white font-extrabold text-xl mb-2">
-                  Grand Rounds <span className="text-blue-400">AI</span>
+                  Grand Rounds <span className="text-blue-400">AI</span>™
                 </p>
                 <p className="text-gray-500 text-sm max-w-sm mx-auto leading-relaxed">
                   Enter your case summary on the left, then tap any specialist to get their consultation in real-time.
@@ -496,7 +496,7 @@ export function GrandRoundsTab() {
                 ))}
               </div>
               <p className="text-xs text-gray-700 max-w-sm">
-                ⚠ Grand Rounds AI is a clinical decision support tool. AI-generated consultations are not a substitute for board-certified specialist opinions. Always verify with a licensed physician before clinical action.
+                ⚠ Grand Rounds AI™ is a clinical decision support tool. AI-generated consultations are not a substitute for board-certified specialist opinions. Always verify with a licensed physician before clinical action.
               </p>
             </div>
 
