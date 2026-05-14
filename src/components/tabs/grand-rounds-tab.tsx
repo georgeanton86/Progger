@@ -9,6 +9,7 @@ type ConsultStatus = "idle" | "streaming" | "done" | "error";
 type ActiveConsult = {
   specialty: string;
   specialistName: string;
+  docName: string;
   icon: string;
   text: string;
   status: ConsultStatus;
@@ -21,6 +22,7 @@ type ActiveConsult = {
 const SPECIALISTS = [
   {
     id: "cardiology",
+    docName: "Cardi",
     name: "Cardiology",
     icon: "🫀",
     tagline: "Chest pain · EKG · Heart failure · Arrhythmia",
@@ -30,6 +32,7 @@ const SPECIALISTS = [
   },
   {
     id: "infectious_disease",
+    docName: "Iggy",
     name: "Infectious Disease",
     icon: "🦠",
     tagline: "Sepsis · Antibiotic selection · Complex infections",
@@ -39,6 +42,7 @@ const SPECIALISTS = [
   },
   {
     id: "orthopedics",
+    docName: "Bones",
     name: "Orthopedics",
     icon: "🦴",
     tagline: "Fractures · MSK injuries · Surgical thresholds",
@@ -48,6 +52,7 @@ const SPECIALISTS = [
   },
   {
     id: "neurology",
+    docName: "Nero",
     name: "Neurology",
     icon: "🧠",
     tagline: "Stroke · Seizure · Headache · HINTS · Syncope",
@@ -57,6 +62,7 @@ const SPECIALISTS = [
   },
   {
     id: "pulmonology",
+    docName: "Pauly",
     name: "Pulmonology",
     icon: "🫁",
     tagline: "Pneumonia · COPD · PE · Asthma · Nodules",
@@ -66,6 +72,7 @@ const SPECIALISTS = [
   },
   {
     id: "emergency_medicine",
+    docName: "Ace",
     name: "Emergency Medicine",
     icon: "🚑",
     tagline: "High-acuity · Undifferentiated · Must-not-miss Dx",
@@ -75,6 +82,7 @@ const SPECIALISTS = [
   },
   {
     id: "gastroenterology",
+    docName: "Gus",
     name: "Gastroenterology",
     icon: "🫃",
     tagline: "GI bleed · Abdominal pain · Liver · IBD",
@@ -84,6 +92,7 @@ const SPECIALISTS = [
   },
   {
     id: "nephrology",
+    docName: "Rena",
     name: "Nephrology",
     icon: "🫘",
     tagline: "AKI · CKD · Electrolytes · Dialysis indications",
@@ -93,6 +102,7 @@ const SPECIALISTS = [
   },
   {
     id: "psychiatry",
+    docName: "Siggy",
     name: "Psychiatry",
     icon: "🧬",
     tagline: "Safety assessment · Mood · Psychosis · SUDs",
@@ -102,6 +112,7 @@ const SPECIALISTS = [
   },
   {
     id: "clinical_pharmacy",
+    docName: "ReX",
     name: "Clinical Pharmacy",
     icon: "💊",
     tagline: "Drug interactions · Dosing · Deprescribing · PDMP",
@@ -111,6 +122,7 @@ const SPECIALISTS = [
   },
   {
     id: "pediatrics",
+    docName: "Pip",
     name: "Pediatrics",
     icon: "👶",
     tagline: "Weight-based dosing · Pediatric vitals · PALS",
@@ -120,6 +132,7 @@ const SPECIALISTS = [
   },
   {
     id: "internal_medicine",
+    docName: "Sage",
     name: "Internal Medicine",
     icon: "🩺",
     tagline: "Diagnostic synthesis · Multimorbidity · Preventive",
@@ -220,8 +233,11 @@ function SpecialistCard({
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="text-xl flex-shrink-0">{spec.icon}</span>
           <div className="min-w-0">
-            <p className="text-xs font-extrabold text-white truncate">{spec.name}</p>
-            <p className="text-xs text-gray-600 leading-snug mt-0.5 line-clamp-2">{spec.tagline}</p>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-sm font-extrabold text-white">{spec.docName}</p>
+              <p className="text-xs text-gray-500 truncate">{spec.name}</p>
+            </div>
+            <p className="text-xs text-gray-600 leading-snug mt-0.5 line-clamp-1">{spec.tagline}</p>
           </div>
         </div>
         {isActive ? (
@@ -275,6 +291,7 @@ export function GrandRoundsTab() {
       return [...prev, {
         specialty: specialtyId,
         specialistName: specMeta.name,
+        docName: specMeta.docName,
         icon: specMeta.icon,
         text: "",
         status: "streaming",
@@ -495,7 +512,7 @@ export function GrandRoundsTab() {
                       )}
                     >
                       <span>{c.icon}</span>
-                      <span className="hidden sm:inline">{c.specialistName}</span>
+                      <span className="hidden sm:inline">{c.docName}</span>
                       {c.status === "streaming" && (
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                       )}
@@ -526,10 +543,11 @@ export function GrandRoundsTab() {
                       <span className="text-2xl">{activeConsult.icon}</span>
                       <div>
                         <p className="text-sm font-extrabold text-white">
-                          AI {activeConsult.specialistName} Consultation
+                          {activeConsult.docName}
+                          <span className="text-gray-500 font-normal ml-1.5 text-xs">{activeConsult.specialistName}</span>
                         </p>
                         <p className="text-xs text-gray-500">
-                          {activeConsult.status === "streaming" ? "Generating…" :
+                          {activeConsult.status === "streaming" ? `${activeConsult.docName} is reviewing the case…` :
                            activeConsult.status === "done" ? `Completed · ${activeConsult.timestamp}` :
                            activeConsult.status === "error" ? "Error" : ""}
                           {activeConsult.question && ` · Q: "${activeConsult.question}"`}
@@ -568,7 +586,7 @@ export function GrandRoundsTab() {
                       <div className="flex items-center gap-3 py-8">
                         <div className="w-5 h-5 rounded-full border-2 border-blue-400 border-t-transparent animate-spin flex-shrink-0" />
                         <p className="text-gray-500 text-sm">
-                          {activeConsult.specialistName} is reviewing the case…
+                          {activeConsult.docName} is reviewing the case…
                         </p>
                       </div>
                     ) : activeConsult.status === "error" ? (
@@ -588,6 +606,7 @@ export function GrandRoundsTab() {
                     {/* Ask follow-up */}
                     {activeConsult.status === "done" && (
                       <FollowUpInput
+                        docName={activeConsult.docName}
                         onAsk={q => runConsult(activeConsult.specialty, q)}
                         disabled={anyStreaming}
                       />
@@ -605,7 +624,7 @@ export function GrandRoundsTab() {
 
 // ── Follow-up question input ──────────────────────────────────────────────────
 
-function FollowUpInput({ onAsk, disabled }: { onAsk: (q: string) => void; disabled: boolean }) {
+function FollowUpInput({ docName, onAsk, disabled }: { docName: string; onAsk: (q: string) => void; disabled: boolean }) {
   const [q, setQ] = useState("");
 
   const submit = () => {
@@ -621,7 +640,7 @@ function FollowUpInput({ onAsk, disabled }: { onAsk: (q: string) => void; disabl
         value={q}
         onChange={e => setQ(e.target.value)}
         onKeyDown={e => e.key === "Enter" && !e.shiftKey && submit()}
-        placeholder="Ask a follow-up question to this specialist…"
+        placeholder={`Ask ${docName} a follow-up question…`}
         disabled={disabled}
         className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 disabled:opacity-40"
       />
