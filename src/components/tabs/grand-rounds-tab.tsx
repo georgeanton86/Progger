@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -265,16 +265,22 @@ export function GrandRoundsTab() {
   const [consults, setConsults] = useState<ActiveConsult[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [globalQuestion, setGlobalQuestion] = useState("");
-  const [anyStreaming, setAnyStreaming] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const abortRefs = useRef<Record<string, AbortController>>({});
+
+  const anyStreaming = consults.some(c => c.status === "streaming");
+
+  useEffect(() => {
+    return () => { Object.values(abortRefs.current).forEach(c => c.abort()); };
+  }, []);
 
   const isActive = (id: string) => consults.some(c => c.specialty === id);
   const activeConsult = consults.find(c => c.specialty === activeTab);
   const spec = SPECIALISTS.find(s => s.id === activeTab);
 
-  const runConsult = useCallback(async (specialtyId: string, question?: string) => {
-    if (!caseContext.trim()) return;
+  const runConsult = useCallback(async (specialtyId: string, question?: string, contextOverride?: string) => {
+    const ctx = contextOverride ?? caseContext;
+    if (!ctx.trim()) return;
     const specMeta = SPECIALISTS.find(s => s.id === specialtyId);
     if (!specMeta) return;
 
@@ -301,7 +307,6 @@ export function GrandRoundsTab() {
     });
 
     setActiveTab(specialtyId);
-    setAnyStreaming(true);
 
     const controller = new AbortController();
     abortRefs.current[specialtyId] = controller;
@@ -310,7 +315,7 @@ export function GrandRoundsTab() {
       const res = await fetch("/api/consult", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ specialty: specialtyId, caseContext, question: question || "" }),
+        body: JSON.stringify({ specialty: specialtyId, caseContext: ctx, question: question || "" }),
         signal: controller.signal,
       });
 
@@ -363,7 +368,6 @@ export function GrandRoundsTab() {
         ));
       }
     } finally {
-      setAnyStreaming(false);
       delete abortRefs.current[specialtyId];
     }
   }, [caseContext]);
@@ -384,9 +388,11 @@ export function GrandRoundsTab() {
   };
 
   const consultAll = async () => {
+    const snapshot = caseContext;
+    const question = globalQuestion;
     for (const spec of SPECIALISTS) {
       if (!isActive(spec.id)) {
-        await runConsult(spec.id, globalQuestion);
+        await runConsult(spec.id, question || undefined, snapshot);
         await new Promise(r => setTimeout(r, 300));
       }
     }

@@ -296,7 +296,7 @@ function DifferentialCard({
 // ── Finding card: always shows differentials for abnormal findings ─────────────
 
 function FindingCard({ finding }: { finding: RadiologyFinding }) {
-  const [selectedDx, setSelectedDx] = useState<number | null>(null);
+  const [selectedDx, setSelectedDx] = useState<string | null>(null);
   const differentials = finding.differentials ?? [];
 
   const borderStyle =
@@ -334,13 +334,13 @@ function FindingCard({ finding }: { finding: RadiologyFinding }) {
       {/* Differentials — shown without requiring a tap on the finding itself */}
       {differentials.length > 0 && (
         <div className="border-t border-gray-700/30 divide-y divide-gray-800/50">
-          {differentials.map((dx, i) => (
+          {differentials.map((dx) => (
             <DifferentialCard
-              key={i}
+              key={dx.label}
               dx={dx}
               finding={finding}
-              selected={selectedDx === i}
-              onSelect={() => setSelectedDx(selectedDx === i ? null : i)}
+              selected={selectedDx === dx.label}
+              onSelect={() => setSelectedDx(selectedDx === dx.label ? null : dx.label)}
             />
           ))}
         </div>
@@ -368,8 +368,8 @@ function NormalFindingsSection({ findings }: { findings: RadiologyFinding[] }) {
       </button>
       {open && (
         <div className="border-t border-gray-800/40 divide-y divide-gray-800/20">
-          {findings.map((f, i) => (
-            <div key={i} className="flex items-start gap-3 px-4 py-2.5">
+          {findings.map((f) => (
+            <div key={`${f.system}_${f.finding}`} className="flex items-start gap-3 px-4 py-2.5">
               <div className="w-2 h-2 rounded-full bg-green-600/50 flex-shrink-0 mt-1.5" />
               <div>
                 <span className="text-xs font-bold text-gray-600 uppercase mr-1.5">{f.system}:</span>
@@ -386,8 +386,8 @@ function NormalFindingsSection({ findings }: { findings: RadiologyFinding[] }) {
 // ── Summary stats bar ─────────────────────────────────────────────────────────
 
 function ReportSummaryBar({ report }: { report: RadiologyReport }) {
-  const abnormal = report.findings.filter(f => f.abnormal).length;
-  const normal   = report.findings.filter(f => !f.abnormal).length;
+  const abnormal = (report.findings ?? []).filter(f => f.abnormal).length;
+  const normal   = (report.findings ?? []).filter(f => !f.abnormal).length;
   const critical = report.criticalFindings.length;
 
   return (
@@ -648,8 +648,8 @@ export function RadiologyTab() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  const abnormalFindings = report?.findings.filter(f => f.abnormal) ?? [];
-  const normalFindings   = report?.findings.filter(f => !f.abnormal) ?? [];
+  const abnormalFindings = (report?.findings ?? []).filter(f => f.abnormal);
+  const normalFindings   = (report?.findings ?? []).filter(f => !f.abnormal);
 
   return (
     <div className="flex flex-col h-full bg-gray-950 overflow-hidden">
@@ -1010,14 +1010,16 @@ export function RadiologyTab() {
                     </div>
 
                     {/* Abnormal findings with care plans */}
-                    {abnormalFindings.length > 0 && (
+                    {abnormalFindings.length > 0 ? (
                       <div className="space-y-2">
                         <p className="text-xs font-extrabold text-gray-500 uppercase tracking-widest">
                           Abnormal Findings
                           <span className="ml-2 normal-case font-normal text-gray-700">— tap a diagnosis to see its care plan</span>
                         </p>
-                        {abnormalFindings.map((f, i) => <FindingCard key={i} finding={f} />)}
+                        {abnormalFindings.map((f) => <FindingCard key={`${f.system}_${f.finding}`} finding={f} />)}
                       </div>
+                    ) : normalFindings.length === 0 && (
+                      <p className="text-sm text-gray-500 italic py-2 text-center">No specific findings identified — review impression above.</p>
                     )}
 
                     {/* Normal findings (collapsed) */}
