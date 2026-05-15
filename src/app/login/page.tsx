@@ -4,68 +4,76 @@ import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Demo: accept any email with password "demo"
-    if (form.password === "demo" || form.email) {
-      document.cookie = "ehr-auth=1; path=/";
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    setLoading(false);
+    if (res.ok) {
       router.push("/dashboard");
     } else {
-      setError("Invalid credentials");
+      setError("Incorrect access code");
+      setCode("");
     }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-600 mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
+      <div className="w-full max-w-sm px-4">
+
+        {/* Logo */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 mb-5">
+            <span className="text-3xl">🩺</span>
           </div>
-          <h1 className="text-3xl font-bold text-white">PrognoSX</h1>
-          <p className="text-gray-400 mt-1">AI Medical Intelligence</p>
+          <h1 className="text-3xl font-black text-white tracking-tight">
+            Prognos<span className="text-blue-400">X</span>
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">AI Medical Intelligence Platform</p>
         </div>
 
+        {/* Card */}
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-8">
-          <h2 className="text-xl font-semibold text-white mb-6">Provider Sign In</h2>
+          <p className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-5">Private Beta — Access Required</p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Email</label>
-              <input
-                type="email"
-                required
-                value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="provider@clinic.com"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Password</label>
+              <label className="block text-xs font-semibold text-gray-400 mb-2">Access Code</label>
               <input
                 type="password"
+                inputMode="numeric"
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                placeholder="••••"
+                autoFocus
                 required
-                value={form.password}
-                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="••••••••"
+                className="w-full px-4 py-3.5 bg-gray-800 border border-gray-700 rounded-xl text-white text-center text-xl tracking-[0.5em] placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
+            {error && (
+              <p className="text-red-400 text-sm text-center">{error}</p>
+            )}
             <button
               type="submit"
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+              disabled={!code || loading}
+              className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors"
             >
-              Sign In
+              {loading ? "Verifying…" : "Enter"}
             </button>
           </form>
-          <p className="text-center text-gray-500 text-sm mt-4">Demo: any email + password &quot;demo&quot;</p>
         </div>
+
+        <p className="text-center text-gray-700 text-xs mt-6">
+          PrognoSX · Private Beta · Not for clinical use
+        </p>
       </div>
     </div>
   );
