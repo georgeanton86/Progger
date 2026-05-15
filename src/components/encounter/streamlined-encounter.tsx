@@ -693,6 +693,133 @@ function buildGrandRoundsSummary(patient: Patient, appointment: Appointment, vit
   return lines.join("\n");
 }
 
+// ── gAIner™ — complexity checklist engine ─────────────────────────────────────
+
+type GainerItem = {
+  id: string;
+  label: string;
+  category: "problems" | "data" | "risk";
+  mdmValue: number;
+  soapPhrase: string;
+};
+
+const GAINER_PRESETS: Record<string, { specialty: string; icon: string; items: GainerItem[] }> = {
+  respiratory: {
+    specialty: "Respiratory / COPD / Asthma", icon: "🫁",
+    items: [
+      { id: "r-p1", label: "Auscultate lungs — document wheeze / rhonchi / diminished BS", category: "problems", mdmValue: 2, soapPhrase: "Lung auscultation: [findings]." },
+      { id: "r-p2", label: "Assess accessory muscle use & work of breathing", category: "problems", mdmValue: 2, soapPhrase: "Accessory muscle use: [present/absent]." },
+      { id: "r-p3", label: "Document exacerbation severity (mild / moderate / severe)", category: "problems", mdmValue: 3, soapPhrase: "Exacerbation severity: [mild/moderate/severe]." },
+      { id: "r-d1", label: "SpO2 compared to patient's documented baseline", category: "data", mdmValue: 1, soapPhrase: "SpO2 [X]% (baseline [X]%)." },
+      { id: "r-d2", label: "Peak flow or spirometry reviewed", category: "data", mdmValue: 2, soapPhrase: "Peak flow: [X] L/min ([X]% predicted)." },
+      { id: "r-d3", label: "Prior CXR reviewed and compared", category: "data", mdmValue: 2, soapPhrase: "CXR reviewed: [findings vs. prior]." },
+      { id: "r-d4", label: "Medication adherence & inhaler technique assessed", category: "data", mdmValue: 1, soapPhrase: "Inhaler technique: [adequate/corrected]." },
+      { id: "r-r1", label: "Systemic symptoms documented (fever, diaphoresis, tachycardia)", category: "risk", mdmValue: 2, soapPhrase: "Systemic symptoms: [present/absent]." },
+      { id: "r-r2", label: "Hospitalization risk stratified", category: "risk", mdmValue: 2, soapPhrase: "Hospitalization risk: [low/moderate/high] based on [criteria]." },
+      { id: "r-r3", label: "Medication escalation decision documented", category: "risk", mdmValue: 3, soapPhrase: "Escalation plan: [add/increase/switch — rationale]." },
+    ],
+  },
+  cardiac: {
+    specialty: "Cardiac / Chest Pain", icon: "🫀",
+    items: [
+      { id: "c-p1", label: "HEART score calculated and documented", category: "problems", mdmValue: 3, soapPhrase: "HEART score: [X]/10 ([low/moderate/high] risk)." },
+      { id: "c-p2", label: "Auscultate heart — murmur / gallop / rub", category: "problems", mdmValue: 2, soapPhrase: "Cardiac auscultation: [RRR, no murmur / findings]." },
+      { id: "c-p3", label: "Peripheral pulses and JVD assessed", category: "problems", mdmValue: 2, soapPhrase: "Peripheral pulses: [2+ bilateral]. JVD: [absent/present]." },
+      { id: "c-d1", label: "EKG reviewed with independent interpretation", category: "data", mdmValue: 2, soapPhrase: "EKG: [NSR / ST changes / findings — my interpretation]." },
+      { id: "c-d2", label: "Serial troponin trend reviewed", category: "data", mdmValue: 3, soapPhrase: "Troponin: [value, trend — rising/stable/negative × 2]." },
+      { id: "c-d3", label: "Prior echo / stress test referenced", category: "data", mdmValue: 2, soapPhrase: "Prior cardiac workup: [date, EF, results]." },
+      { id: "c-r1", label: "ACS ruled in/out — clinical reasoning documented", category: "risk", mdmValue: 3, soapPhrase: "ACS: [ruled out by HEART + troponin / ruled in — plan]." },
+      { id: "c-r2", label: "Anticoagulation or antiplatelet decision documented", category: "risk", mdmValue: 3, soapPhrase: "Anticoagulation: [initiated/deferred — rationale]." },
+    ],
+  },
+  neuro: {
+    specialty: "Neurology / Headache / Dizziness", icon: "🧠",
+    items: [
+      { id: "n-p1", label: "HINTS exam (Head Impulse, Nystagmus, Test of Skew)", category: "problems", mdmValue: 3, soapPhrase: "HINTS: HI [normal/abnormal], Nystagmus [direction], Skew [absent/present]." },
+      { id: "n-p2", label: "NIH Stroke Scale calculated", category: "problems", mdmValue: 3, soapPhrase: "NIHSS: [score]/42." },
+      { id: "n-p3", label: "Cranial nerves II–XII assessed", category: "problems", mdmValue: 2, soapPhrase: "CN II–XII: [intact / deficits]." },
+      { id: "n-p4", label: "Gait, coordination, Romberg test performed", category: "problems", mdmValue: 2, soapPhrase: "Gait: [steady/unsteady]. Romberg: [negative/positive]." },
+      { id: "n-d1", label: "CT or MRI reviewed and interpreted", category: "data", mdmValue: 3, soapPhrase: "CT/MRI brain: [no acute findings / findings]." },
+      { id: "n-d2", label: "Ottawa SAH rule applied and documented", category: "data", mdmValue: 2, soapPhrase: "Ottawa SAH Rule: [criteria met/absent — low risk/imaging indicated]." },
+      { id: "n-r1", label: "Driving restriction counseling documented", category: "risk", mdmValue: 2, soapPhrase: "Driving restriction counseled: [no driving until — patient verbalized understanding]." },
+      { id: "n-r2", label: "AED initiation / medication risk and monitoring plan", category: "risk", mdmValue: 3, soapPhrase: "AED: [initiated/adjusted — monitoring plan, labs, return instructions]." },
+    ],
+  },
+  ortho: {
+    specialty: "Orthopedic / MSK / Trauma", icon: "🦴",
+    items: [
+      { id: "o-p1", label: "Ottawa rules applied (ankle / knee / C-spine)", category: "problems", mdmValue: 2, soapPhrase: "Ottawa Rules applied: [imaging indicated/not indicated]." },
+      { id: "o-p2", label: "Range of motion measured and documented", category: "problems", mdmValue: 2, soapPhrase: "ROM: [flexion X°, extension X°, abduction X°]." },
+      { id: "o-p3", label: "Neurovascular status distal to injury", category: "problems", mdmValue: 2, soapPhrase: "Neurovascular: distal pulses [intact], sensation [intact], motor [intact]." },
+      { id: "o-p4", label: "Compartment syndrome assessed", category: "problems", mdmValue: 3, soapPhrase: "Compartment syndrome ruled out: soft compartments, passive stretch pain negative." },
+      { id: "o-d1", label: "X-ray reviewed with independent interpretation", category: "data", mdmValue: 2, soapPhrase: "X-ray [view]: [no acute fracture / fracture location / alignment]." },
+      { id: "o-d2", label: "Prior imaging compared", category: "data", mdmValue: 2, soapPhrase: "Compared to prior [date]: [stable/new finding]." },
+      { id: "o-r1", label: "DVT / PE risk stratified (Wells score)", category: "risk", mdmValue: 2, soapPhrase: "Wells DVT: [score] — [low/moderate/high] risk." },
+      { id: "o-r2", label: "Weight-bearing status and return-to-activity plan", category: "risk", mdmValue: 2, soapPhrase: "Weight-bearing: [NWB/TTWB/WBAT/FWB]. Return to activity: [timeframe]." },
+      { id: "o-r3", label: "Surgical vs. conservative decision documented", category: "risk", mdmValue: 3, soapPhrase: "Management decision: [surgical referral / conservative — splint/PT/casting]." },
+    ],
+  },
+  diabetes: {
+    specialty: "Diabetes / Chronic Disease", icon: "💉",
+    items: [
+      { id: "d-p1", label: "A1C trend reviewed (current vs. prior)", category: "problems", mdmValue: 2, soapPhrase: "A1C: [X]% (prior [X]% on [date]) — [improving/stable/worsening]." },
+      { id: "d-p2", label: "Diabetes complication screen documented", category: "problems", mdmValue: 2, soapPhrase: "Complication screen: retinopathy [date], nephropathy [date], neuropathy [assessed today]." },
+      { id: "d-p3", label: "Multiple chronic conditions addressed this visit", category: "problems", mdmValue: 3, soapPhrase: "Chronic conditions managed today: [list all]." },
+      { id: "d-d1", label: "Labs reviewed: BMP, CBC, lipids, A1C", category: "data", mdmValue: 2, soapPhrase: "Labs reviewed: BMP [date], A1C [value], lipids [date]." },
+      { id: "d-d2", label: "Specialist notes referenced", category: "data", mdmValue: 2, soapPhrase: "Specialist notes reviewed: [specialty, date, key finding]." },
+      { id: "d-d3", label: "PDMP checked for controlled substances", category: "data", mdmValue: 1, soapPhrase: "PDMP reviewed: [no concerns / findings noted]." },
+      { id: "d-r1", label: "Insulin or medication adjustment decision documented", category: "risk", mdmValue: 3, soapPhrase: "Medication adjustment: [drug, dose change, rationale, monitoring plan]." },
+      { id: "d-r2", label: "Hypoglycemia risk counseled", category: "risk", mdmValue: 2, soapPhrase: "Hypoglycemia counseled: signs/symptoms reviewed, rescue plan provided." },
+    ],
+  },
+  general: {
+    specialty: "General / Multi-System", icon: "🩺",
+    items: [
+      { id: "g-p1", label: "Acuity and nature of presenting problem documented", category: "problems", mdmValue: 1, soapPhrase: "Presenting problem: [acute/chronic, stable/worsening]." },
+      { id: "g-p2", label: "2+ chronic conditions addressed and managed", category: "problems", mdmValue: 2, soapPhrase: "Chronic conditions managed: [list]." },
+      { id: "g-p3", label: "New problem with uncertain prognosis", category: "problems", mdmValue: 2, soapPhrase: "New problem: [diagnosis, uncertain prognosis, workup initiated]." },
+      { id: "g-d1", label: "Labs or imaging ordered and/or reviewed", category: "data", mdmValue: 1, soapPhrase: "Diagnostic data: [ordered/reviewed — results and interpretation]." },
+      { id: "g-d2", label: "External records or prior notes reviewed", category: "data", mdmValue: 2, soapPhrase: "External records reviewed: [source, date, relevant findings]." },
+      { id: "g-d3", label: "Independent interpretation of test performed", category: "data", mdmValue: 2, soapPhrase: "Independent interpretation: [test, findings, clinical correlation]." },
+      { id: "g-r1", label: "Prescription management with monitoring required", category: "risk", mdmValue: 2, soapPhrase: "Rx management: [drug, dose, monitoring plan]." },
+      { id: "g-r2", label: "Counseling on high-risk topic (falls, driving, substance use)", category: "risk", mdmValue: 2, soapPhrase: "Counseling provided: [topic, patient understanding confirmed]." },
+      { id: "g-r3", label: "Drug therapy requiring intensive toxicity monitoring", category: "risk", mdmValue: 3, soapPhrase: "High-risk medication: [drug, toxicity monitoring plan, patient counseled]." },
+    ],
+  },
+};
+
+function getGainerPreset(cc: string) {
+  const c = (cc ?? "").toLowerCase();
+  if (c.match(/breath|copd|asthma|wheez|cough|pneumon|dyspnea|sob|lung/)) return GAINER_PRESETS.respiratory;
+  if (c.match(/chest|cardiac|heart|palpitat/)) return GAINER_PRESETS.cardiac;
+  if (c.match(/head|neuro|dizz|seizure|stroke|syncope|vertigo/)) return GAINER_PRESETS.neuro;
+  if (c.match(/knee|ankle|shoulder|hip|back|fracture|msk|ortho|injury|pain|sprain/)) return GAINER_PRESETS.ortho;
+  if (c.match(/diabet|a1c|glucose|insulin|htn|hypert|chronic/)) return GAINER_PRESETS.diabetes;
+  return GAINER_PRESETS.general;
+}
+
+// ── gAIner™ logo SVG ──────────────────────────────────────────────────────────
+
+function GainerLogo({ size = 36 }: { size?: number }) {
+  return (
+    <div
+      className="rounded-xl flex-shrink-0 overflow-hidden"
+      style={{ width: size, height: size, background: "linear-gradient(135deg, #059669 0%, #0d9488 50%, #0891b2 100%)" }}
+    >
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width={size} height={size}>
+        {/* Upward-trending ECG pulse line */}
+        <polyline points="3,30 7,30 9,22 12,34 15,12 18,28 22,24 26,18 30,11 35,4"
+          stroke="white" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.95" />
+        {/* Arrow tip at end */}
+        <polyline points="31,3 35,4 34,8"
+          stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Subtle "G" watermark */}
+        <text x="3" y="38" fontSize="7" fontWeight="900" fill="white" opacity="0.18" fontFamily="system-ui">gAI</text>
+      </svg>
+    </div>
+  );
+}
+
 function LoadingScreen() {
   const steps = ["Analyzing Chief Complaint", "Applying 2025 EBM Guidelines", "Generating DDX + ICD-10", "Writing SOAP Note", "Calculating E&M Billing", "Checking HEDIS Measures", "Flagging Liability Risks", "Finalizing Chart"];
   const [step, setStep] = useState(0);
@@ -1088,6 +1215,8 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
   const [attachResult, setAttachResult] = useState<DocumentExtraction | null>(null);
   const [mdmSelections, setMdmSelections] = useState<{ problems: number; data: number; risk: number }>({ problems: -1, data: -1, risk: -1 });
   const [grCopied, setGrCopied] = useState(false);
+  const [showGainer, setShowGainer] = useState(false);
+  const [gainerChecked, setGainerChecked] = useState<Set<string>>(new Set());
   const attachInputRef = useRef<HTMLInputElement>(null);
   const visitTimer = useTimer();
   const [preVisitMinutes] = useState(8); // pre-visit chart review time
@@ -1731,6 +1860,165 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
 
               {/* LEGAL SHIELD */}
               <LegalShieldSection chiefComplaint={patient.primaryComplaint ?? ""} />
+
+              {/* ── gAIner™ ─────────────────────────────────────────────── */}
+              {(() => {
+                const preset = getGainerPreset(patient.primaryComplaint ?? "");
+                const checkedItems = preset.items.filter(i => gainerChecked.has(i.id));
+                const byCategory = (cat: GainerItem["category"]) => preset.items.filter(i => i.category === cat);
+                const catColor = { problems: "text-purple-400 border-purple-700/40 bg-purple-900/20", data: "text-blue-400 border-blue-700/40 bg-blue-900/20", risk: "text-red-400 border-red-700/40 bg-red-900/20" };
+                const catLabel = { problems: "🔬 Problems", data: "📊 Data", risk: "⚠️ Risk" };
+
+                const toggleItem = (item: GainerItem) => {
+                  const next = new Set(gainerChecked);
+                  if (next.has(item.id)) { next.delete(item.id); } else { next.add(item.id); }
+                  setGainerChecked(next);
+                  const checked = preset.items.filter(i => next.has(i.id));
+                  const newMdm = { problems: -1, data: -1, risk: -1 };
+                  for (const ci of checked) { newMdm[ci.category] = Math.max(newMdm[ci.category], ci.mdmValue); }
+                  if (checked.length > 0) setMdmSelections(newMdm);
+                };
+
+                const acceptAll = () => {
+                  const allIds = new Set(preset.items.map(i => i.id));
+                  setGainerChecked(allIds);
+                  const newMdm = { problems: -1, data: -1, risk: -1 };
+                  for (const item of preset.items) { newMdm[item.category] = Math.max(newMdm[item.category], item.mdmValue); }
+                  setMdmSelections(newMdm);
+                  const phrases = preset.items.map(i => i.soapPhrase).join("\n");
+                  setSoapEdits(prev => ({ ...prev, plan: ((prev.plan ?? carePlan.soap.plan ?? "") + "\n\n— gAIner™ Documentation —\n" + phrases).trim() }));
+                };
+
+                const applyToSoap = () => {
+                  if (!checkedItems.length) return;
+                  const phrases = checkedItems.map(i => i.soapPhrase).join("\n");
+                  setSoapEdits(prev => ({ ...prev, plan: ((prev.plan ?? carePlan.soap.plan ?? "") + "\n\n— gAIner™ Documentation —\n" + phrases).trim() }));
+                };
+
+                const mdmLevel = calcMDMLevel(mdmSelections);
+                const projectedCode = mdmLevel >= 0 ? MDM_CODES_EST[mdmLevel] : null;
+
+                return (
+                  <div className="rounded-xl border border-emerald-700/40 overflow-hidden">
+                    {/* Header */}
+                    <button
+                      onClick={() => setShowGainer(g => !g)}
+                      className="w-full flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-emerald-950/60 to-teal-950/40 border-b border-emerald-700/30 hover:from-emerald-950/80 transition-all"
+                    >
+                      <GainerLogo size={38} />
+                      <div className="flex-1 text-left min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-black text-white text-sm tracking-tight">
+                            g<span className="text-emerald-400">AI</span>ner™
+                          </p>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-700/30 text-emerald-400">
+                            {preset.icon} {preset.specialty}
+                          </span>
+                          {checkedItems.length > 0 && (
+                            <span className="text-xs font-bold text-emerald-300">{checkedItems.length} items checked</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5 italic">Complexity over the clock.</p>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        {projectedCode && (
+                          <div className="text-right">
+                            <p className="text-xs text-gray-600">Projected</p>
+                            <p className="text-lg font-black text-emerald-400">{projectedCode}</p>
+                          </div>
+                        )}
+                        <span className={cn("text-gray-500 text-sm transition-transform duration-200", showGainer && "rotate-180")}>▾</span>
+                      </div>
+                    </button>
+
+                    {showGainer && (
+                      <div className="bg-gray-900/60">
+                        {/* Slogan bar */}
+                        <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+                          <p className="text-xs text-gray-600 italic">"Bill your expertise. Not your time."</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={applyToSoap}
+                              disabled={!checkedItems.length}
+                              className="text-xs px-3 py-1.5 rounded-lg border border-teal-700/40 text-teal-400 hover:bg-teal-900/20 disabled:opacity-30 transition-colors font-semibold"
+                            >
+                              ↓ Apply to SOAP
+                            </button>
+                            <button
+                              onClick={acceptAll}
+                              className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors flex items-center gap-1.5"
+                            >
+                              ✓ Accept All → {MDM_CODES_EST[3]}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Checklist by category */}
+                        <div className="p-3 space-y-3">
+                          {(["problems", "data", "risk"] as const).map(cat => (
+                            <div key={cat}>
+                              <p className={cn("text-xs font-extrabold uppercase tracking-widest mb-1.5 px-1", catColor[cat].split(" ")[0])}>
+                                {catLabel[cat]}
+                              </p>
+                              <div className="space-y-1">
+                                {byCategory(cat).map(item => {
+                                  const checked = gainerChecked.has(item.id);
+                                  return (
+                                    <button
+                                      key={item.id}
+                                      onClick={() => toggleItem(item)}
+                                      className={cn(
+                                        "w-full flex items-start gap-3 px-3 py-2.5 rounded-xl border text-left transition-all",
+                                        checked
+                                          ? cn("border-opacity-60", catColor[cat])
+                                          : "border-gray-800 bg-gray-800/30 hover:border-gray-700 hover:bg-gray-800/50"
+                                      )}
+                                    >
+                                      <div className={cn(
+                                        "w-5 h-5 rounded-md border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-all",
+                                        checked ? "bg-emerald-500 border-emerald-400" : "border-gray-600"
+                                      )}>
+                                        {checked && <span className="text-white text-xs font-black leading-none">✓</span>}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className={cn("text-sm leading-snug", checked ? "text-white font-medium" : "text-gray-400")}>{item.label}</p>
+                                        {checked && (
+                                          <p className="text-xs text-gray-600 mt-1 font-mono leading-relaxed">{item.soapPhrase}</p>
+                                        )}
+                                      </div>
+                                      <span className={cn(
+                                        "flex-shrink-0 text-xs px-1.5 py-0.5 rounded font-bold mt-0.5",
+                                        item.mdmValue === 3 ? "bg-red-900/30 text-red-400" :
+                                        item.mdmValue === 2 ? "bg-amber-900/30 text-amber-400" :
+                                        "bg-gray-800 text-gray-600"
+                                      )}>
+                                        {["Min", "Low", "Mod", "High"][item.mdmValue]}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Live code projection */}
+                        {checkedItems.length > 0 && (
+                          <div className="px-4 py-3 border-t border-gray-800 flex items-center justify-between bg-emerald-900/10">
+                            <p className="text-xs text-gray-500">
+                              {checkedItems.length} of {preset.items.length} items checked
+                              <span className="text-gray-700"> · {MDM_LABELS[mdmLevel] ?? "—"} MDM</span>
+                            </p>
+                            <p className="text-sm font-extrabold text-emerald-400">
+                              Projected: {projectedCode ?? "—"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* BILLING INTELLIGENCE */}
               <div className="bg-gray-900 border border-emerald-700/30 rounded-xl overflow-hidden">
