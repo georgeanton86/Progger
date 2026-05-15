@@ -32,13 +32,17 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 mb-5">
-            <span className="text-3xl">🩺</span>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5 overflow-hidden" style={{ background: "linear-gradient(135deg, #0d9488 0%, #0891b2 100%)" }}>
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+              <polyline points="4,18 9,18 11,10 14,26 17,14 20,22 23,18 32,18" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.9"/>
+              <text x="22" y="14" fontSize="9" fontWeight="800" fill="white" opacity="0.55" fontFamily="system-ui">X</text>
+            </svg>
           </div>
           <h1 className="text-3xl font-black text-white tracking-tight">
-            Prognos<span className="text-blue-400">X</span>
+            Prognos<span className="text-teal-400">X</span>
           </h1>
           <p className="text-gray-500 text-sm mt-1">AI Medical Intelligence Platform</p>
+          <p className="text-gray-700 text-xs mt-1">Founded by Dr. George Antonopoulos</p>
         </div>
 
         {/* Card */}

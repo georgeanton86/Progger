@@ -411,10 +411,18 @@ export default function DashboardPage() {
       )}>
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">Rx</div>
+            {/* PrognoSX logo mark */}
+            <div className="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden" style={{ background: "linear-gradient(135deg, #0d9488 0%, #0891b2 100%)" }}>
+              <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                {/* ECG pulse line */}
+                <polyline points="4,18 9,18 11,10 14,26 17,14 20,22 23,18 32,18" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.9"/>
+                {/* X mark overlay — top right */}
+                <text x="22" y="14" fontSize="9" fontWeight="800" fill="white" opacity="0.55" fontFamily="system-ui">X</text>
+              </svg>
+            </div>
             <div className="min-w-0">
-              <p className="font-semibold text-white text-sm">PrognoSX</p>
-              <p className="text-xs text-gray-400">AI Medical Intelligence</p>
+              <p className="font-bold text-white text-sm tracking-tight">Prognos<span className="text-teal-400">X</span></p>
+              <p className="text-xs text-gray-500">AI Medical Intelligence</p>
             </div>
           </div>
         </div>
@@ -437,6 +445,10 @@ export default function DashboardPage() {
           <div className="px-3 py-2">
             <p className="text-xs text-gray-500 truncate">{sampleProvider.name}</p>
             <p className="text-xs text-gray-600">{sampleProvider.specialty}</p>
+          </div>
+          <div className="px-3 pb-2 border-t border-gray-800/60 pt-2">
+            <p className="text-xs text-teal-600 font-semibold truncate">Dr. George Antonopoulos</p>
+            <p className="text-xs text-gray-700">Founder &amp; CEO</p>
           </div>
         </div>
       </aside>
