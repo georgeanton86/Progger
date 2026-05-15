@@ -655,6 +655,44 @@ function SectionCard({
   );
 }
 
+// ── MDM complexity calculator (2021 AMA E&M guidelines) ──────────────────────
+
+const MDM_LABELS = ["Minimal", "Low", "Moderate", "High"] as const;
+const MDM_CODES_EST  = ["99212", "99213", "99214", "99215"];
+const MDM_CODES_NEW  = ["99202", "99203", "99204", "99205"];
+
+function calcMDMLevel(sels: { problems: number; data: number; risk: number }) {
+  const vals = [sels.problems, sels.data, sels.risk].filter(v => v >= 0).sort((a, b) => b - a);
+  if (vals.length < 2) return -1;
+  return vals[1]; // 2-of-3 rule: level is determined by 2nd-highest element
+}
+
+// ── Grand Rounds case summary formatter ───────────────────────────────────────
+
+function buildGrandRoundsSummary(patient: Patient, appointment: Appointment, vitals: { bp: string; hr: string; temp: string; spo2: string; wt: string }, carePlan: CarePlan | null): string {
+  const lines: string[] = [
+    `Patient: ${patient.name}, ${patient.age}yo. CC: ${patient.primaryComplaint ?? "See notes"}.`,
+  ];
+  const v = [
+    vitals.bp && `BP ${vitals.bp}`,
+    vitals.hr && `HR ${vitals.hr}`,
+    vitals.temp && `Temp ${vitals.temp}`,
+    vitals.spo2 && `SpO2 ${vitals.spo2}%`,
+    vitals.wt && `Wt ${vitals.wt}`,
+  ].filter(Boolean).join(", ");
+  if (v) lines.push(`Vitals: ${v}.`);
+  if (patient.medicalHistory?.length) lines.push(`PMH: ${patient.medicalHistory.join(", ")}.`);
+  if (patient.medications?.length) lines.push(`Meds: ${patient.medications.join(", ")}.`);
+  const allergies = (patient.allergies ?? []).filter(a => a !== "None");
+  if (allergies.length) lines.push(`Allergies: ${allergies.join(", ")}.`);
+  if (carePlan) {
+    lines.push(`Assessment: ${carePlan.assessment.primary}`);
+    if (carePlan.assessment.secondaries?.length) lines.push(`Also consider: ${carePlan.assessment.secondaries.join(", ")}.`);
+    if (carePlan.treatmentPlan.items?.length) lines.push(`Plan: ${carePlan.treatmentPlan.items.slice(0, 4).join(" · ")}.`);
+  }
+  return lines.join("\n");
+}
+
 function LoadingScreen() {
   const steps = ["Analyzing Chief Complaint", "Applying 2025 EBM Guidelines", "Generating DDX + ICD-10", "Writing SOAP Note", "Calculating E&M Billing", "Checking HEDIS Measures", "Flagging Liability Risks", "Finalizing Chart"];
   const [step, setStep] = useState(0);
@@ -1048,6 +1086,8 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
   const [showPrintSummary, setShowPrintSummary] = useState(false);
   const [attachState, setAttachState] = useState<"idle" | "loading" | "done">("idle");
   const [attachResult, setAttachResult] = useState<DocumentExtraction | null>(null);
+  const [mdmSelections, setMdmSelections] = useState<{ problems: number; data: number; risk: number }>({ problems: -1, data: -1, risk: -1 });
+  const [grCopied, setGrCopied] = useState(false);
   const attachInputRef = useRef<HTMLInputElement>(null);
   const visitTimer = useTimer();
   const [preVisitMinutes] = useState(8); // pre-visit chart review time
@@ -1699,26 +1739,69 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
                   <span className="text-emerald-300 font-bold">${carePlan.billing.totalBillable} billable</span>
                 </div>
                 <div className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="text-center px-4 py-3 bg-emerald-900/20 border border-emerald-700/40 rounded-xl">
-                      <p className="text-2xl font-bold text-emerald-400">{carePlan.billing.emCode}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{carePlan.billing.emLevel}</p>
-                    </div>
-                    <div className="flex-1 space-y-1.5 text-xs">
-                      <div className="flex items-start gap-2">
-                        <span className="text-gray-500 w-16 flex-shrink-0">Problems:</span>
-                        <span className="text-gray-300">{carePlan.billing.mdm.problems}</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-gray-500 w-16 flex-shrink-0">Data:</span>
-                        <span className="text-gray-300">{carePlan.billing.mdm.data}</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-gray-500 w-16 flex-shrink-0">Risk:</span>
-                        <span className="text-gray-300">{carePlan.billing.mdm.risk}</span>
-                      </div>
-                    </div>
-                  </div>
+                  {/* ── MDM Interactive Grid (2021 AMA) ── */}
+                  {(() => {
+                    const mdmLevel = calcMDMLevel(mdmSelections);
+                    const hasSelections = mdmLevel >= 0;
+                    const displayCode = hasSelections ? MDM_CODES_EST[mdmLevel] : carePlan.billing.emCode;
+                    const displayLevel = hasSelections ? `${MDM_LABELS[mdmLevel]} MDM` : carePlan.billing.emLevel;
+                    const mdmRows = [
+                      { key: "problems" as const, label: "Problems", descriptions: ["Self-limited/minor", "Stable chronic illness", "Chronic w/ exacerbation", "Threat to life/function"] },
+                      { key: "data" as const, label: "Data", descriptions: ["Minimal/none", "Limited data reviewed", "Moderate: external records", "Extensive: multiple tests"] },
+                      { key: "risk" as const, label: "Risk", descriptions: ["Minimal (OTC meds)", "Low (Rx management)", "Moderate (monitoring req.)", "High (toxicity/surgery)"] },
+                    ];
+                    return (
+                      <>
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="text-center px-4 py-3 bg-emerald-900/20 border border-emerald-700/40 rounded-xl flex-shrink-0">
+                            <p className="text-2xl font-bold text-emerald-400">{displayCode}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{displayLevel}</p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">MDM Grid — tap to select complexity</p>
+                            <p className="text-xs text-gray-600">2021 AMA: bill higher of MDM or time · 2-of-3 rule</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-gray-700 overflow-hidden mb-3">
+                          {/* Header */}
+                          <div className="grid grid-cols-5 bg-gray-800 border-b border-gray-700">
+                            <div className="px-2 py-1.5 text-xs font-bold text-gray-500" />
+                            {MDM_LABELS.map(l => (
+                              <div key={l} className="px-2 py-1.5 text-center text-xs font-bold text-gray-400">{l}</div>
+                            ))}
+                          </div>
+                          {mdmRows.map(row => (
+                            <div key={row.key} className="grid grid-cols-5 border-b border-gray-800/60 last:border-0">
+                              <div className="px-2 py-2 text-xs font-bold text-gray-400 flex items-center">{row.label}</div>
+                              {row.descriptions.map((desc, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => setMdmSelections(prev => ({ ...prev, [row.key]: prev[row.key] === idx ? -1 : idx }))}
+                                  className={cn(
+                                    "px-1.5 py-2 text-xs text-center transition-all border-l border-gray-800/60 leading-snug",
+                                    mdmSelections[row.key] === idx
+                                      ? idx === 3 ? "bg-red-900/40 text-red-300 font-bold"
+                                        : idx === 2 ? "bg-amber-900/40 text-amber-300 font-bold"
+                                        : idx === 1 ? "bg-blue-900/40 text-blue-300 font-bold"
+                                        : "bg-gray-700 text-gray-200 font-bold"
+                                      : "text-gray-600 hover:bg-gray-800 hover:text-gray-400"
+                                  )}
+                                >
+                                  {desc}
+                                </button>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                        {hasSelections && (
+                          <div className="flex items-center gap-2 mb-3 p-2.5 rounded-lg bg-emerald-900/15 border border-emerald-700/30">
+                            <span className="text-emerald-400 font-extrabold text-sm">{displayCode}</span>
+                            <span className="text-gray-500 text-xs">— {displayLevel} · document 2-of-3 MDM elements in chart</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   {carePlan.billing.addOnCodes.length > 0 && (
                     <div className="space-y-1 mb-3">
                       {carePlan.billing.addOnCodes.map((code, i) => (
@@ -1891,10 +1974,51 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
                 </div>
               </div>
 
-              {/* ASSESSMENT */}
-              <SectionCard title="Assessment" confidence={carePlan.assessment.confidence} source={carePlan.assessment.source} status={statuses["assessment"] ?? "accepted"} onAccept={() => accept("assessment")} onReject={() => reject("assessment")}
-                items={[carePlan.assessment.primary, ...carePlan.assessment.secondaries, ...carePlan.assessment.ruleOut.map(r => `Rule out: ${r}`)].filter(Boolean)}
-              />
+              {/* ASSESSMENT — structured grid */}
+              <div className="rounded-xl border border-purple-700/30 overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-purple-700/20 bg-purple-900/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-purple-300 text-sm">Assessment</span>
+                    <span className="text-xs text-gray-600">{carePlan.assessment.confidence}% confidence</span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => reject("assessment")} className={cn("text-xs px-2.5 py-1 rounded-lg border font-semibold transition-all", statuses["assessment"] === "rejected" ? "bg-red-600 border-red-500 text-white" : "border-red-700/40 text-red-400 hover:bg-red-900/20")}>✕ Reject</button>
+                    <button onClick={() => accept("assessment")} className={cn("text-xs px-2.5 py-1 rounded-lg border font-semibold transition-all", statuses["assessment"] !== "rejected" ? "bg-green-600 border-green-500 text-white" : "border-gray-600 text-gray-400 hover:bg-gray-700")}>✓ Accept</button>
+                  </div>
+                </div>
+                <div className="divide-y divide-gray-800/60">
+                  {/* Primary dx */}
+                  <div className="flex items-center gap-3 px-4 py-2.5 bg-purple-900/10">
+                    <span className="text-xs font-extrabold text-purple-400 uppercase w-14 flex-shrink-0">Primary</span>
+                    <span className="text-sm text-white font-semibold flex-1">{carePlan.assessment.primary}</span>
+                    <span className="text-xs font-extrabold text-purple-400 bg-purple-900/30 border border-purple-700/30 px-2 py-0.5 rounded-full">
+                      {carePlan.ddx[0]?.icd10 ?? ""}
+                    </span>
+                  </div>
+                  {/* Secondary diagnoses */}
+                  {carePlan.assessment.secondaries.map((dx, i) => (
+                    <div key={dx} className="flex items-center gap-3 px-4 py-2">
+                      <span className="text-xs font-bold text-gray-500 uppercase w-14 flex-shrink-0">#{i + 2}</span>
+                      <span className="text-sm text-gray-300 flex-1">{dx}</span>
+                      <span className="text-xs text-teal-600 font-mono">{carePlan.ddx[i + 1]?.icd10 ?? ""}</span>
+                    </div>
+                  ))}
+                  {/* Rule-outs */}
+                  {carePlan.assessment.ruleOut.length > 0 && (
+                    <div className="px-4 py-2 flex flex-wrap gap-1.5">
+                      <span className="text-xs font-bold text-gray-600 uppercase mr-1 self-center">R/O:</span>
+                      {carePlan.assessment.ruleOut.map(r => (
+                        <span key={r} className="text-xs px-2 py-0.5 bg-gray-800 border border-gray-700 rounded-full text-gray-400">{r}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {carePlan.assessment.source && (
+                  <div className="px-4 py-1.5 border-t border-gray-800 bg-gray-800/30">
+                    <p className="text-xs text-gray-600">Source: {carePlan.assessment.source}</p>
+                  </div>
+                )}
+              </div>
 
               {/* DDX — right after assessment, with legal risk meter */}
               {carePlan.ddx.length > 0 && (() => {
@@ -2081,9 +2205,27 @@ export function StreamlinedEncounter({ patient, appointment, onBack, initialCare
 
               {/* SOAP DROP CHART */}
               <div id="section-soap" className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-gray-800">
-                  <p className="font-bold text-white text-sm">SOAP Note — Pre-Written</p>
-                  <p className="text-xs text-gray-500">Edit any field · Click Done when satisfied</p>
+                <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <p className="font-bold text-white text-sm">SOAP Note — Pre-Written</p>
+                    <p className="text-xs text-gray-500">Edit any field · Click Done when satisfied</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const summary = buildGrandRoundsSummary(patient, appointment, vitals, carePlan);
+                      navigator.clipboard?.writeText(summary).catch(() => {});
+                      setGrCopied(true);
+                      setTimeout(() => setGrCopied(false), 2500);
+                    }}
+                    className={cn(
+                      "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all flex-shrink-0",
+                      grCopied
+                        ? "border-green-600/50 bg-green-900/20 text-green-400"
+                        : "border-blue-700/40 bg-blue-900/10 text-blue-400 hover:border-blue-500/60 hover:bg-blue-900/20"
+                    )}
+                  >
+                    {grCopied ? "✓ Copied!" : "🏥 Copy for Grand Rounds AI™"}
+                  </button>
                 </div>
                 <div className="p-4 space-y-3">
                   {(["subjective", "objective", "assessment", "plan"] as const).map(field => {
