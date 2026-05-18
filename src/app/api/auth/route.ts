@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid access code" }, { status: 401 });
   }
   const res = NextResponse.json({ ok: true });
-  res.cookies.set("psx_auth", "ok", {
+  res.cookies.set("psx_auth_v2", "ok", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
