@@ -391,6 +391,7 @@ export default function DashboardPage() {
   const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   function handleTabSelect(tabId: string) {
+    setEncounterCtx(null);
     setActiveTab(tabId);
     setSidebarOpen(false);
   }
