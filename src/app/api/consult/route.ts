@@ -449,10 +449,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "specialty and caseContext are required" }, { status: 400 });
   }
 
-  const systemPrompt = SPECIALISTS[specialty];
-  if (!systemPrompt) {
+  const basePrompt = SPECIALISTS[specialty];
+  if (!basePrompt) {
     return NextResponse.json({ error: `Unknown specialty: ${specialty}` }, { status: 400 });
   }
+
+  const systemPrompt = basePrompt + `
+
+━━━ MANDATORY FINAL SECTION — ALWAYS END WITH THIS EXACT BLOCK ━━━
+After your full consultation, append this block verbatim with your values filled in:
+
+---CLINICAL-DECISION-START---
+BOTTOM_LINE: [Single sentence — the most critical action the provider must take right now]
+DECISION_QUESTION: [The one binary clinical decision facing this provider]
+CHOICE_A: [Short option A label, e.g. "Test First — Order Rapid Strep"]
+CHOICE_A_STEPS:
+1. [Specific action — drug + dose + route + frequency OR specific procedure]
+2. [Action 2]
+3. [Action 3 if needed]
+CHOICE_B: [Short option B label, e.g. "Treat Empirically Now"]
+CHOICE_B_STEPS:
+1. [Action 1]
+2. [Action 2]
+3. [Action 3 if needed]
+AI_RECOMMENDS: A
+AI_RATIONALE: [One sentence evidence-based reason why you recommend A or B]
+TEACHING_PEARL: [High-yield teaching point from this specific case — suitable for physician CME credit]
+---CLINICAL-DECISION-END---`;
 
   const userMessage = question
     ? `CASE:\n${caseContext}\n\nSPECIFIC QUESTION FOR YOU: ${question}\n\nPlease provide your specialty consultation.`

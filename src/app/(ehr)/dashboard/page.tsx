@@ -14,6 +14,7 @@ import { SettingsTab } from "@/components/tabs/settings-tab";
 import { LabReviewTab } from "@/components/tabs/lab-review-tab";
 import { RadiologyTab } from "@/components/tabs/radiology-tab";
 import { GrandRoundsTab } from "@/components/tabs/grand-rounds-tab";
+import { CmeGainerTab } from "@/components/tabs/cme-gainer-tab";
 import { PatientAvatar, PatientHealthCard } from "@/components/patient-avatar";
 import { StreamlinedEncounter, buildCarePlanPrompt, parseCarePlanJSON, type CarePlan } from "@/components/encounter/streamlined-encounter";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ const tabs = [
   { id: "lab-review", label: "Lab Review", icon: "🧪" },
   { id: "radiology", label: "rAIdiology™", icon: "🩻" },
   { id: "grand-rounds", label: "Grand Rounds AI™", icon: "🏥" },
+  { id: "cme", label: "CME gAIner™", icon: "🎓" },
   { id: "scope", label: "Scope Validation", icon: "🛡" },
   { id: "care-planning", label: "Care Planning", icon: "✏️" },
   { id: "briefing", label: "Protective Briefing", icon: "📋" },
@@ -547,6 +549,7 @@ export default function DashboardPage() {
           {!encounterCtx && activeTab === "grand-rounds" && (
             <GrandRoundsTab initialContext={grandRoundsContext} onContextConsumed={() => setGrandRoundsContext("")} />
           )}
+          {!encounterCtx && activeTab === "cme" && <CmeGainerTab />}
           {!encounterCtx && activeTab === "ehr" && <EhrIntegrationTab />}
           {!encounterCtx && activeTab === "settings" && <SettingsTab />}
         </main>

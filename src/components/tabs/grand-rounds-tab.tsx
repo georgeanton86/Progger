@@ -2,9 +2,23 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
+import { saveCmeCase } from "./cme-gainer-tab";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type ConsultStatus = "idle" | "streaming" | "done" | "error";
+
+type DecisionFlow = {
+  bottomLine: string;
+  decisionQuestion: string;
+  choiceA: string;
+  choiceASteps: string[];
+  choiceB: string;
+  choiceBSteps: string[];
+  aiRecommends: "A" | "B";
+  aiRationale: string;
+  teachingPearl: string;
+};
 
 type ActiveConsult = {
   specialty: string;
@@ -141,6 +155,191 @@ const SPECIALISTS = [
     badgeColor: "bg-indigo-900/50 text-indigo-300 border-indigo-700/40",
   },
 ];
+
+// ── Decision flow parser ──────────────────────────────────────────────────────
+
+function parseSteps(block: string, afterLabel: string, beforeLabel: string): string[] {
+  const startIdx = block.indexOf(afterLabel);
+  if (startIdx === -1) return [];
+  const chunk = block.slice(startIdx + afterLabel.length);
+  const endIdx = chunk.indexOf(beforeLabel);
+  const section = endIdx === -1 ? chunk : chunk.slice(0, endIdx);
+  return section.split("\n")
+    .filter(l => /^\d+\./.test(l.trim()))
+    .map(l => l.replace(/^\d+\.\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function parseDecisionFlow(text: string): DecisionFlow | null {
+  const startMarker = "---CLINICAL-DECISION-START---";
+  const endMarker = "---CLINICAL-DECISION-END---";
+  const startIdx = text.indexOf(startMarker);
+  if (startIdx === -1) return null;
+  const block = text.slice(startIdx + startMarker.length, text.indexOf(endMarker, startIdx) || undefined);
+
+  const get = (label: string) => {
+    const match = block.match(new RegExp(`${label}:\\s*(.+?)(?=\\n[A-Z_]+:|\\n---CLINICAL|$)`, "s"));
+    return match?.[1]?.trim().replace(/\[.*?\]/g, "").trim() || "";
+  };
+
+  const bottomLine = get("BOTTOM_LINE");
+  const decisionQuestion = get("DECISION_QUESTION");
+  const choiceA = get("CHOICE_A(?!_)");
+  const choiceB = get("CHOICE_B(?!_)");
+  const aiRecommends = (get("AI_RECOMMENDS") || "A").charAt(0) as "A" | "B";
+  const aiRationale = get("AI_RATIONALE");
+  const teachingPearl = block.match(/TEACHING_PEARL:\s*([\s\S]*?)(?=\n---CLINICAL|$)/)?.[1]?.trim() || "";
+
+  const choiceASteps = parseSteps(block, "CHOICE_A_STEPS:", "\nCHOICE_B:");
+  const choiceBSteps = parseSteps(block, "CHOICE_B_STEPS:", "\nAI_RECOMMENDS:");
+
+  if (!bottomLine) return null;
+  return { bottomLine, decisionQuestion, choiceA, choiceASteps, choiceB, choiceBSteps, aiRecommends, aiRationale, teachingPearl };
+}
+
+function stripDecisionBlock(text: string): string {
+  const startIdx = text.indexOf("---CLINICAL-DECISION-START---");
+  if (startIdx === -1) return text;
+  const endIdx = text.indexOf("---CLINICAL-DECISION-END---", startIdx);
+  if (endIdx === -1) return text.slice(0, startIdx).trimEnd();
+  return (text.slice(0, startIdx) + text.slice(endIdx + "---CLINICAL-DECISION-END---".length)).trimEnd();
+}
+
+// ── Decision flow card ────────────────────────────────────────────────────────
+
+function DecisionFlowCard({ flow, consult, onCmeSaved }: {
+  flow: DecisionFlow;
+  consult: ActiveConsult;
+  onCmeSaved: () => void;
+}) {
+  const [chosen, setChosen] = useState<"A" | "B" | null>(null);
+  const [cmeSaved, setCmeSaved] = useState(false);
+
+  const steps = chosen === "A" ? flow.choiceASteps : chosen === "B" ? flow.choiceBSteps : [];
+
+  const handleEarnCme = () => {
+    if (cmeSaved) return;
+    saveCmeCase({
+      id: `${consult.specialty}-${Date.now()}`,
+      specialty: consult.specialistName,
+      docName: consult.docName,
+      icon: consult.icon,
+      pearl: flow.teachingPearl,
+      timestamp: new Date().toISOString(),
+    });
+    setCmeSaved(true);
+    onCmeSaved();
+  };
+
+  return (
+    <div className="bg-gray-900 border border-blue-700/30 rounded-2xl overflow-hidden">
+      {/* Bottom line verdict */}
+      <div className="flex items-start gap-3 p-4 bg-blue-950/20 border-b border-blue-700/20">
+        <span className="text-xl flex-shrink-0 mt-0.5">⚡</span>
+        <p className="text-sm font-extrabold text-white leading-snug">{flow.bottomLine}</p>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {/* Decision question */}
+        {flow.decisionQuestion && (
+          <p className="text-xs font-extrabold text-gray-400 uppercase tracking-widest text-center leading-snug">
+            {flow.decisionQuestion}
+          </p>
+        )}
+
+        {/* Choice buttons */}
+        <div className="grid grid-cols-2 gap-2.5">
+          {[
+            { key: "A" as const, label: flow.choiceA },
+            { key: "B" as const, label: flow.choiceB },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setChosen(chosen === key ? null : key)}
+              className={cn(
+                "p-3 rounded-xl border text-left transition-all space-y-1",
+                flow.aiRecommends === key && chosen !== key && "border-green-700/50 bg-green-950/10",
+                chosen === key ? "border-blue-500 bg-blue-950/20" : "border-gray-700 hover:border-gray-500"
+              )}
+            >
+              {flow.aiRecommends === key && (
+                <p className="text-xs text-green-400 font-extrabold flex items-center gap-1">
+                  <span>★</span> AI Recommends
+                </p>
+              )}
+              <p className="text-xs font-bold text-white leading-snug">{label || `Option ${key}`}</p>
+              {chosen !== key && (
+                <p className="text-xs text-gray-600">Tap to see steps</p>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Steps revealed after choosing */}
+        {chosen && steps.length > 0 && (
+          <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+            <p className="text-xs font-extrabold text-blue-400 uppercase tracking-widest">
+              Action Steps — {chosen === "A" ? flow.choiceA : flow.choiceB}
+            </p>
+            {steps.map((step, i) => (
+              <div key={i} className="flex items-start gap-3 p-3 bg-gray-800/60 rounded-xl border border-gray-700/40">
+                <span className="text-xs font-black text-blue-400 w-5 flex-shrink-0 text-right mt-0.5">{i + 1}</span>
+                <p className="text-sm text-gray-200 leading-relaxed">{step}</p>
+              </div>
+            ))}
+            {flow.aiRationale && (
+              <p className="text-xs text-gray-500 italic px-1">💡 {flow.aiRationale}</p>
+            )}
+          </div>
+        )}
+
+        {/* Teaching pearl + CME */}
+        {flow.teachingPearl && (
+          <div className="p-3 bg-amber-950/15 border border-amber-800/30 rounded-xl space-y-2">
+            <p className="text-xs font-extrabold text-amber-500">📚 Teaching Pearl</p>
+            <p className="text-xs text-amber-200 leading-relaxed">{flow.teachingPearl}</p>
+            <button
+              onClick={handleEarnCme}
+              disabled={cmeSaved}
+              className={cn(
+                "w-full py-2 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5",
+                cmeSaved
+                  ? "border-green-700/40 bg-green-900/10 text-green-400 cursor-default"
+                  : "border-amber-700/40 text-amber-400 hover:bg-amber-900/20 active:scale-[0.98]"
+              )}
+            >
+              {cmeSaved ? "✓ Added to CME gAIner™" : "🎓 Earn CME Credit → CME gAIner™"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Full consultation accordion ───────────────────────────────────────────────
+
+function FullConsultAccordion({ text, status }: { text: string; status: ConsultStatus }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-2xl border border-gray-800 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-900/40 hover:bg-gray-800/40 transition-colors"
+      >
+        <span className="text-xs font-extrabold text-gray-500 uppercase tracking-widest">
+          Full Specialist Consultation
+        </span>
+        <span className={cn("text-gray-500 text-sm transition-transform duration-200", open && "rotate-180")}>▾</span>
+      </button>
+      {open && (
+        <div className="border-t border-gray-800 p-4">
+          <ConsultText text={text} status={status} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Consultation text renderer ────────────────────────────────────────────────
 
@@ -609,7 +808,22 @@ export function GrandRoundsTab({ initialContext, onContextConsumed }: { initialC
                           ↺ Retry
                         </button>
                       </div>
-                    ) : (
+                    ) : activeConsult.status === "done" ? (() => {
+                        const flow = parseDecisionFlow(activeConsult.text);
+                        const displayText = stripDecisionBlock(activeConsult.text);
+                        return (
+                          <div className="space-y-4">
+                            {flow && (
+                              <DecisionFlowCard
+                                flow={flow}
+                                consult={activeConsult}
+                                onCmeSaved={() => {}}
+                              />
+                            )}
+                            <FullConsultAccordion text={displayText || activeConsult.text} status="done" />
+                          </div>
+                        );
+                      })() : (
                       <ConsultText text={activeConsult.text} status={activeConsult.status} />
                     )}
 
