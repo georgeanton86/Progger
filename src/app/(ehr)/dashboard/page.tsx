@@ -311,6 +311,7 @@ export default function DashboardPage() {
   const [now, setNow] = useState(new Date());
   const [encounterCtx, setEncounterCtx] = useState<{ patient: Patient; apt: Appointment } | null>(null);
   const [showIntake, setShowIntake] = useState(false);
+  const [grandRoundsContext, setGrandRoundsContext] = useState("");
 
   // Pre-generate care plans for all today's patients as soon as dashboard loads
   const pregenCache = useRef<Record<string, CarePlan>>({});
@@ -539,8 +540,12 @@ export default function DashboardPage() {
           {!encounterCtx && activeTab === "patients" && <PatientsTab />}
           {!encounterCtx && activeTab === "appointments" && <AppointmentsTab />}
           {!encounterCtx && activeTab === "lab-review" && <LabReviewTab />}
-          {!encounterCtx && activeTab === "radiology" && <RadiologyTab />}
-          {!encounterCtx && activeTab === "grand-rounds" && <GrandRoundsTab />}
+          {!encounterCtx && activeTab === "radiology" && (
+            <RadiologyTab onSendToGrandRounds={ctx => { setGrandRoundsContext(ctx); setActiveTab("grand-rounds"); }} />
+          )}
+          {!encounterCtx && activeTab === "grand-rounds" && (
+            <GrandRoundsTab initialContext={grandRoundsContext} onContextConsumed={() => setGrandRoundsContext("")} />
+          )}
           {!encounterCtx && activeTab === "ehr" && <EhrIntegrationTab />}
           {!encounterCtx && activeTab === "settings" && <SettingsTab />}
         </main>

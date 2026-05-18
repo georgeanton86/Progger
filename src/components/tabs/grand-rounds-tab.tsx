@@ -260,13 +260,17 @@ function SpecialistCard({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function GrandRoundsTab() {
-  const [caseContext, setCaseContext] = useState("");
+export function GrandRoundsTab({ initialContext, onContextConsumed }: { initialContext?: string; onContextConsumed?: () => void } = {}) {
+  const [caseContext, setCaseContext] = useState(initialContext ?? "");
   const [consults, setConsults] = useState<ActiveConsult[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [globalQuestion, setGlobalQuestion] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const abortRefs = useRef<Record<string, AbortController>>({});
+
+  useEffect(() => {
+    if (initialContext) { setCaseContext(initialContext); onContextConsumed?.(); }
+  }, [initialContext, onContextConsumed]);
 
   const anyStreaming = consults.some(c => c.status === "streaming");
 

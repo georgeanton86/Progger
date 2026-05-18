@@ -94,6 +94,106 @@ const LOADING_STAGES = [
   { icon: "📋", text: "Building evidence-based care plans…" },
 ];
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function buildGrandRoundsContext(report: RadiologyReport): string {
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const lines: string[] = [
+    `rAIdiology™ Preliminary Read — ${report.detectedModality}`,
+    `Date: ${today} · Urgency: ${report.urgency.toUpperCase()} · AI Confidence: ${report.confidence}%`,
+    ``,
+    `IMPRESSION:`,
+    report.impression,
+    ``,
+  ];
+  if (report.criticalFindings.length > 0) {
+    lines.push(`🚨 CRITICAL FINDINGS:`);
+    report.criticalFindings.forEach(f => lines.push(`• ${f}`));
+    lines.push(``);
+  }
+  const abnormal = (report.findings ?? []).filter(f => f.abnormal);
+  if (abnormal.length > 0) {
+    lines.push(`ABNORMAL FINDINGS:`);
+    abnormal.forEach(f => {
+      lines.push(`• [${f.system}] ${f.finding} (${f.severity})`);
+      (f.differentials ?? []).slice(0, 2).forEach(dx =>
+        lines.push(`  → ${dx.confidence}% ${dx.label}${dx.icd10 ? ` (${dx.icd10})` : ""} — ${dx.disposition}`)
+      );
+    });
+    lines.push(``);
+  }
+  if (report.recommendations.length > 0) {
+    lines.push(`RECOMMENDATIONS:`);
+    report.recommendations.forEach(r => lines.push(`• ${r}`));
+    lines.push(``);
+  }
+  if (report.nextImaging) lines.push(`Next Imaging: ${report.nextImaging}`);
+  lines.push(`\nPlease provide specialist consultation on the above findings.`);
+  return lines.join("\n");
+}
+
+function buildConsultReferral(report: RadiologyReport): string {
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const abnormal = (report.findings ?? []).filter(f => f.abnormal);
+  return [
+    `RADIOLOGY CONSULTATION REFERRAL`,
+    `Date: ${today}`,
+    ``,
+    `RE: ${report.detectedModality} — AI-Assisted Preliminary Read`,
+    ``,
+    `To Whom It May Concern,`,
+    ``,
+    `I am referring this patient for specialist consultation following an AI-assisted radiology review that identified findings requiring further evaluation.`,
+    ``,
+    `CLINICAL IMPRESSION:`,
+    report.impression,
+    ``,
+    ...(report.criticalFindings.length > 0 ? [`🚨 CRITICAL FINDINGS:`, ...report.criticalFindings.map(f => `• ${f}`), ``] : []),
+    `ABNORMAL FINDINGS REQUIRING REVIEW:`,
+    ...abnormal.map(f => {
+      const top = (f.differentials ?? [])[0];
+      return `• [${f.system}] ${f.finding}${top ? ` — most likely: ${top.label} (${top.confidence}%)` : ""}`;
+    }),
+    ``,
+    `RECOMMENDATIONS:`,
+    ...report.recommendations.map(r => `• ${r}`),
+    ``,
+    ...(report.nextImaging ? [`SUGGESTED NEXT IMAGING: ${report.nextImaging}`, ``] : []),
+    `URGENCY: ${report.urgency.toUpperCase()}`,
+    ``,
+    `Note: This referral is based on an rAIdiology™ AI-assisted preliminary read. All findings require verification by a board-certified radiologist and clinical correlation.`,
+    ``,
+    `Respectfully,`,
+    `Dr. George Antonopoulos`,
+    `PrognoSX — AI Medical Intelligence`,
+  ].join("\n");
+}
+
+function buildImagingOrder(report: RadiologyReport): string {
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const abnormal = (report.findings ?? []).filter(f => f.abnormal);
+  const priority = report.urgency === "emergent" ? "STAT" : report.urgency === "urgent" ? "URGENT" : "ROUTINE";
+  return [
+    `DIAGNOSTIC IMAGING ORDER`,
+    `Date: ${today} · Priority: ${priority}`,
+    ``,
+    ...(report.nextImaging ? [`ORDERED STUDY: ${report.nextImaging}`, ``] : [`ORDERED STUDY: [Specify based on clinical findings]`, ``]),
+    `CLINICAL INDICATION:`,
+    `${report.impression}`,
+    ``,
+    `RELEVANT FINDINGS FROM PRIOR STUDY (${report.detectedModality}):`,
+    ...abnormal.map(f => `• ${f.system}: ${f.finding}`),
+    ``,
+    `ICD-10 CODES:`,
+    ...report.icd10Codes.slice(0, 4).map(c => `• ${c.code} — ${c.description}`),
+    ``,
+    `Ordering Provider: Dr. George Antonopoulos`,
+    `Platform: PrognoSX rAIdiology™`,
+    ``,
+    `⚠ AI-generated order. Must be reviewed and signed by a licensed physician before submission.`,
+  ].join("\n");
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 function parseJSON<T>(text: string): T | null {
@@ -483,9 +583,127 @@ function LoadingView({ analyzing }: { analyzing: boolean }) {
   );
 }
 
+// ── Grand Rounds suggestion popup ─────────────────────────────────────────────
+
+function GrandRoundsSuggestion({ report, onSend, onDismiss }: {
+  report: RadiologyReport;
+  onSend: () => void;
+  onDismiss: () => void;
+}) {
+  const abnormal = (report.findings ?? []).filter(f => f.abnormal).length;
+  const critical = report.criticalFindings.length;
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
+      <div className="bg-gray-900 border border-blue-600/60 rounded-2xl p-4 shadow-2xl shadow-black/60">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-900/40 border border-blue-700/40 flex items-center justify-center flex-shrink-0 text-xl">🏥</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-extrabold text-white">
+              Send to Grand Rounds AI™?
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+              {critical > 0 && <span className="text-red-400 font-bold">🚨 {critical} critical · </span>}
+              {abnormal} abnormal finding{abnormal !== 1 ? "s" : ""} detected. Get instant specialist input from all 12 AI consultants.
+            </p>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={onSend}
+                className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+              >
+                🏥 Send to Grand Rounds AI™ →
+              </button>
+              <button
+                onClick={onDismiss}
+                className="px-3 py-2 rounded-xl border border-gray-700 text-gray-500 hover:text-white text-xs transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Referrals panel ───────────────────────────────────────────────────────────
+
+function ReferralsPanel({ report }: { report: RadiologyReport }) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"consult" | "imaging">("consult");
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copy = (text: string, key: string) => {
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2500);
+  };
+
+  const consultText = buildConsultReferral(report);
+  const imagingText = buildImagingOrder(report);
+  const hasNextImaging = !!report.nextImaging;
+
+  return (
+    <div className="rounded-2xl border border-purple-700/30 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-purple-900/10 hover:bg-purple-900/20 transition-colors"
+      >
+        <span className="flex items-center gap-2 text-sm font-bold text-purple-300">
+          📄 Generate Referrals & Orders
+          {hasNextImaging && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-900/40 border border-purple-700/30 text-purple-400 font-semibold">
+              Imaging order ready
+            </span>
+          )}
+        </span>
+        <span className={cn("text-gray-500 text-sm transition-transform duration-200", open && "rotate-180")}>▾</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-purple-700/20">
+          {/* Tabs */}
+          <div className="flex border-b border-gray-800">
+            {(["consult", "imaging"] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={cn(
+                  "flex-1 py-2 text-xs font-bold transition-colors",
+                  tab === t ? "text-purple-300 border-b-2 border-purple-500" : "text-gray-500 hover:text-gray-300"
+                )}
+              >
+                {t === "consult" ? "📋 Consult Referral" : "🔬 Imaging Order"}
+              </button>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div className="p-4">
+            <pre className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap font-mono bg-gray-800/50 rounded-xl p-4 max-h-64 overflow-y-auto border border-gray-700/40">
+              {tab === "consult" ? consultText : imagingText}
+            </pre>
+            <button
+              onClick={() => copy(tab === "consult" ? consultText : imagingText, tab)}
+              className={cn(
+                "mt-3 w-full py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2",
+                copied === tab
+                  ? "border-green-600/50 bg-green-900/20 text-green-400"
+                  : "border-purple-700/40 text-purple-400 hover:bg-purple-900/20"
+              )}
+            >
+              {copied === tab ? "✓ Copied to clipboard!" : `📋 Copy ${tab === "consult" ? "Referral Letter" : "Imaging Order"}`}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function RadiologyTab() {
+export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (context: string) => void } = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef  = useRef<HTMLInputElement>(null);
 
@@ -514,6 +732,9 @@ export function RadiologyTab() {
   const [docLoading, setDocLoading] = useState(false);
   const [docResult, setDocResult]   = useState<DocumentExtraction | null>(null);
   const [docError, setDocError]     = useState<string | null>(null);
+
+  const [grDismissed, setGrDismissed] = useState(false);
+  const [grSent, setGrSent]           = useState(false);
 
   // ── File loading ────────────────────────────────────────────────────────────
 
@@ -569,6 +790,8 @@ export function RadiologyTab() {
     if (!imageBase64) return;
     setAnalyzing(true);
     setError(null);
+    setGrDismissed(false);
+    setGrSent(false);
     try {
       const res = await fetch("/api/radiology", {
         method: "POST",
@@ -974,6 +1197,15 @@ export function RadiologyTab() {
                 <div className="flex-1 overflow-y-auto">
                   <DisclaimerBanner />
 
+                  {/* Grand Rounds AI™ suggestion popup */}
+                  {(abnormalFindings.length > 0 || report.criticalFindings.length > 0) && !grDismissed && !grSent && onSendToGrandRounds && (
+                    <GrandRoundsSuggestion
+                      report={report}
+                      onSend={() => { onSendToGrandRounds(buildGrandRoundsContext(report)); setGrSent(true); setGrDismissed(true); }}
+                      onDismiss={() => setGrDismissed(true)}
+                    />
+                  )}
+
                   <div className="p-4 space-y-4">
 
                     {/* Report header */}
@@ -1038,6 +1270,9 @@ export function RadiologyTab() {
                         </div>
                       </div>
                     )}
+
+                    {/* Referrals & orders panel */}
+                    {abnormalFindings.length > 0 && <ReferralsPanel report={report} />}
 
                     {/* Next imaging */}
                     {report.nextImaging && (
