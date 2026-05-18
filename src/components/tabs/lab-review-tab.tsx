@@ -3,6 +3,7 @@ import { useState } from "react";
 import { samplePatients, sampleLabReviews } from "@/lib/sampleData";
 import { PatientAvatar } from "@/components/patient-avatar";
 import { cn } from "@/lib/utils";
+import { useStreamingAI } from "@/hooks/use-streaming-ai";
 import type { Patient, LabResult, LabResultStatus, PatientLabReview } from "@/lib/types";
 
 function statusStyle(s: LabResultStatus) {
@@ -148,11 +149,177 @@ function PrintableCard({ review, patient }: { review: PatientLabReview; patient:
   );
 }
 
+function NewLabReviewForm({ onBack }: { onBack: () => void }) {
+  const [patientName, setPatientName] = useState("");
+  const [patientAge, setPatientAge] = useState("");
+  const [visitContext, setVisitContext] = useState("");
+  const [labValues, setLabValues] = useState("");
+  const { output, loading, run, reset } = useStreamingAI();
+
+  function generate() {
+    if (!patientName.trim() || !labValues.trim()) return;
+    run(
+      `You are a physician creating a patient-friendly lab results summary. Generate a clear, empathetic, and actionable lab review document using plain text with section headers. Use these sections:
+
+## Summary
+(2-3 sentence plain-language overview of the overall lab picture)
+
+## Your Lab Results Explained
+(For each lab value provided, explain what it measures, whether the value is normal/abnormal, and what it means for the patient in simple language. Use bullet points.)
+
+## What This Means For You
+(Practical implications — lifestyle, diet, activity, symptoms to watch for)
+
+## Recommended Next Steps
+(3-5 numbered actionable items: follow-up labs, referrals, medication changes, lifestyle interventions)
+
+## Follow-Up
+(When to recheck labs and what to expect at next visit)
+
+Be warm, clear, and avoid medical jargon. Explain any terms you must use.`,
+      `Patient: ${patientName}${patientAge ? `, Age: ${patientAge}` : ""}
+Visit Context: ${visitContext || "Routine lab review"}
+Lab Values:
+${labValues}`
+    );
+  }
+
+  const hasResult = output.length > 0;
+
+  return (
+    <div className="p-6 max-w-3xl">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="text-sm text-gray-400 hover:text-white transition-colors">
+          ← Lab Reviews
+        </button>
+        <span className="text-gray-700">/</span>
+        <h1 className="text-lg font-bold text-white">New Lab Review</h1>
+      </div>
+
+      {!hasResult ? (
+        <div className="space-y-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+            <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Patient Info</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Patient Name *</label>
+                <input
+                  value={patientName}
+                  onChange={e => setPatientName(e.target.value)}
+                  placeholder="e.g. Jane Smith"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Age</label>
+                <input
+                  value={patientAge}
+                  onChange={e => setPatientAge(e.target.value)}
+                  placeholder="e.g. 52"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Visit Context</label>
+              <input
+                value={visitContext}
+                onChange={e => setVisitContext(e.target.value)}
+                placeholder="e.g. Annual wellness visit, Diabetes follow-up, Pre-op evaluation"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-teal-500"
+              />
+            </div>
+          </div>
+
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <label className="text-xs text-gray-500 block mb-1">
+              Lab Values * <span className="text-gray-700 font-normal">(paste or type results — any format)</span>
+            </label>
+            <textarea
+              value={labValues}
+              onChange={e => setLabValues(e.target.value)}
+              rows={10}
+              placeholder={`Paste lab results in any format, e.g.:
+
+HbA1c: 7.2% (ref 4.0–5.6)
+Glucose fasting: 138 mg/dL (ref 70–99)
+Total Cholesterol: 214 mg/dL
+LDL: 142 mg/dL
+HDL: 48 mg/dL
+Triglycerides: 188 mg/dL
+eGFR: 72 mL/min/1.73m2
+Creatinine: 1.1 mg/dL
+CBC: WBC 6.2, Hgb 13.4, Plt 245
+TSH: 2.1 mIU/L`}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-teal-500 resize-none font-mono leading-relaxed"
+            />
+          </div>
+
+          <button
+            onClick={generate}
+            disabled={!patientName.trim() || !labValues.trim() || loading}
+            className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-semibold text-sm transition-colors"
+          >
+            {loading ? "Generating…" : "Generate Patient-Friendly Summary"}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-white">{patientName}{patientAge ? `, ${patientAge} yo` : ""}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{visitContext || "Lab Review"} · {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { reset(); }}
+                className="px-3 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-400 hover:text-white hover:border-gray-500 transition-colors"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors"
+              >
+                🖨 Print / Save PDF
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="prose prose-sm max-w-none">
+              {output.split("\n").map((line, i) => {
+                if (line.startsWith("## ")) {
+                  return <h2 key={i} className="text-base font-bold text-gray-800 mt-5 mb-2 first:mt-0">{line.slice(3)}</h2>;
+                }
+                if (line.startsWith("- ") || line.startsWith("• ")) {
+                  return <p key={i} className="text-sm text-gray-700 ml-3 mb-1 flex gap-2"><span className="text-teal-500 flex-shrink-0">•</span>{line.slice(2)}</p>;
+                }
+                if (/^\d+\./.test(line)) {
+                  return <p key={i} className="text-sm text-gray-700 ml-3 mb-1">{line}</p>;
+                }
+                if (line.trim() === "") return <div key={i} className="h-2" />;
+                return <p key={i} className="text-sm text-gray-700 mb-1 leading-relaxed">{line}</p>;
+              })}
+              {loading && <span className="inline-block w-2 h-4 bg-teal-500 animate-pulse ml-1 rounded-sm" />}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function LabReviewTab() {
   const [selected, setSelected] = useState<string | null>(null);
+  const [showNew, setShowNew] = useState(false);
 
   const review = sampleLabReviews.find(r => r.patientId === selected);
   const patient = review ? samplePatients.find(p => p.id === review.patientId) : null;
+
+  if (showNew) {
+    return <NewLabReviewForm onBack={() => setShowNew(false)} />;
+  }
 
   if (review && patient) {
     return (
@@ -220,11 +387,13 @@ export function LabReviewTab() {
         })}
       </div>
 
-      {/* Coming soon hint */}
-      <div className="mt-6 p-4 rounded-xl border border-gray-800 bg-gray-900/30 border-dashed text-center">
-        <p className="text-sm text-gray-500">+ New Lab Review</p>
+      <button
+        onClick={() => setShowNew(true)}
+        className="mt-6 w-full p-4 rounded-xl border border-dashed border-gray-700 bg-gray-900/30 hover:border-teal-500/50 hover:bg-teal-600/5 transition-all text-center group"
+      >
+        <p className="text-sm text-gray-400 group-hover:text-teal-300 transition-colors">+ New Lab Review</p>
         <p className="text-xs text-gray-700 mt-1">Enter patient labs to generate a custom patient-friendly summary</p>
-      </div>
+      </button>
     </div>
   );
 }
