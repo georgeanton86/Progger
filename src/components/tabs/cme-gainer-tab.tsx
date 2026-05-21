@@ -123,13 +123,14 @@ function QuizModal({ caseEntry, onClose, onComplete }: {
   const submit = () => {
     if (!selected || !current) return;
     const correct = selected.startsWith(current.correct + ":");
+    const finalCorrect = correctCount + (correct ? 1 : 0);
     setAnswered(prev => ({ ...prev, [step]: { chosen: selected, correct } }));
     setSelected(null);
     if (step < questions.length - 1) {
       setStep(s => s + 1);
     } else {
       setDone(true);
-      if (passed || correctCount + (correct ? 1 : 0) >= 2) {
+      if (finalCorrect >= 2) {
         updateCase(caseEntry.id, { quizDone: true, creditsEarned: 0.25 });
         onComplete(caseEntry.id);
       }
@@ -319,7 +320,7 @@ export function CmeGainerTab() {
         <QuizModal
           caseEntry={quizCase}
           onClose={() => { setQuizCase(null); refresh(); }}
-          onComplete={() => { setQuizCase(null); refresh(); }}
+          onComplete={() => refresh()}
         />
       )}
 
