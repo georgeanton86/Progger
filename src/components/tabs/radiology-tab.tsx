@@ -19,6 +19,7 @@ type RadiologyFinding = {
   finding: string;
   abnormal: boolean;
   severity: "normal" | "mild" | "moderate" | "severe" | "critical";
+  imageLocation?: { x: number; y: number };
   differentials?: CarePlanOption[];
 };
 
@@ -237,6 +238,85 @@ function flagColor(flag: string) {
          flag === "high" || flag === "low" ? "text-amber-400 font-bold" : "text-green-400";
 }
 
+// ── Finding overlay (circles on the image) ────────────────────────────────────
+
+function FindingOverlay({
+  findings,
+  highlighted,
+  onHighlight,
+  zoom,
+}: {
+  findings: RadiologyFinding[];
+  highlighted: string | null;
+  onHighlight: (key: string | null) => void;
+  zoom: number;
+}) {
+  const annotated = findings.filter(f => f.abnormal && f.imageLocation);
+  if (!annotated.length) return null;
+
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{ transform: `scale(${zoom / 100})`, transformOrigin: "center" }}
+    >
+      {annotated.map((f, i) => {
+        const key = `${f.system}_${f.finding}`;
+        const active = highlighted === key;
+        const ringColor =
+          f.severity === "critical" ? "#ef4444" :
+          f.severity === "severe"   ? "#f97316" :
+          f.severity === "moderate" ? "#f59e0b" : "#eab308";
+
+        return (
+          <div
+            key={key}
+            className="absolute pointer-events-auto cursor-pointer group"
+            style={{
+              left: `${f.imageLocation!.x}%`,
+              top:  `${f.imageLocation!.y}%`,
+              transform: "translate(-50%, -50%)",
+              zIndex: active ? 20 : 10,
+            }}
+            onClick={() => onHighlight(active ? null : key)}
+          >
+            {/* Outer pulsing ring — always on for critical, on-hover/active otherwise */}
+            <div
+              className={cn(
+                "absolute rounded-full border-2 transition-all duration-300",
+                f.severity === "critical" || active ? "animate-ping" : "opacity-0 group-hover:opacity-100 group-hover:animate-ping"
+              )}
+              style={{
+                borderColor: ringColor,
+                width: 52, height: 52,
+                top: -10, left: -10,
+                opacity: active ? 0.6 : 0.4,
+              }}
+            />
+            {/* Main annotation circle */}
+            <div
+              className="relative w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-200"
+              style={{
+                borderColor: ringColor,
+                backgroundColor: active ? `${ringColor}30` : "rgba(0,0,0,0.45)",
+                boxShadow: active ? `0 0 16px ${ringColor}70, 0 0 4px ${ringColor}` : `0 0 6px ${ringColor}50`,
+              }}
+            >
+              <span className="text-xs font-black" style={{ color: ringColor }}>{i + 1}</span>
+            </div>
+            {/* Tooltip label on hover */}
+            <div className={cn(
+              "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap px-2 py-1 rounded-lg text-xs font-semibold text-white bg-gray-900/95 border pointer-events-none transition-opacity duration-150",
+              active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            )} style={{ borderColor: ringColor }}>
+              {f.system}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function UrgencyBadge({ urgency }: { urgency: "routine" | "urgent" | "emergent" }) {
@@ -395,9 +475,16 @@ function DifferentialCard({
 
 // ── Finding card: always shows differentials for abnormal findings ─────────────
 
-function FindingCard({ finding }: { finding: RadiologyFinding }) {
+function FindingCard({ finding, index, highlighted, onHighlight }: {
+  finding: RadiologyFinding;
+  index: number;
+  highlighted: string | null;
+  onHighlight: (key: string | null) => void;
+}) {
   const [selectedDx, setSelectedDx] = useState<string | null>(null);
   const differentials = finding.differentials ?? [];
+  const key = `${finding.system}_${finding.finding}`;
+  const isHighlighted = highlighted === key;
 
   const borderStyle =
     finding.severity === "critical" ? "border-red-600/50 bg-gradient-to-r from-red-950/40 to-red-950/20" :
@@ -407,10 +494,21 @@ function FindingCard({ finding }: { finding: RadiologyFinding }) {
     "border-gray-800 bg-gray-900/30";
 
   return (
-    <div className={cn("rounded-2xl border overflow-hidden", borderStyle)}>
+    <div
+      className={cn("rounded-2xl border overflow-hidden transition-all duration-200", borderStyle, isHighlighted && "ring-2 ring-blue-500/60 shadow-lg shadow-blue-900/20")}
+      onClick={() => finding.imageLocation && onHighlight(isHighlighted ? null : key)}
+    >
       {/* Finding header */}
       <div className="px-4 py-3.5 flex items-start gap-3">
         <SeverityDot severity={finding.severity} />
+        {finding.imageLocation && (
+          <div className={cn(
+            "flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-black mt-0.5 transition-colors",
+            isHighlighted ? "border-blue-400 bg-blue-900/30 text-blue-300" : "border-gray-600 text-gray-500"
+          )}>
+            {index + 1}
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <p className="text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-0.5">{finding.system}</p>
           <p className="text-sm text-gray-100 leading-snug">{finding.finding}</p>
@@ -728,6 +826,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   const [analyzing, setAnalyzing] = useState(false);
   const [report, setReport]       = useState<RadiologyReport | null>(null);
   const [error, setError]         = useState<string | null>(null);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
 
   const [docLoading, setDocLoading] = useState(false);
   const [docResult, setDocResult]   = useState<DocumentExtraction | null>(null);
@@ -792,6 +891,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
     setError(null);
     setGrDismissed(false);
     setGrSent(false);
+    setHighlighted(null);
     try {
       const res = await fetch("/api/radiology", {
         method: "POST",
@@ -1071,6 +1171,15 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                     transition: "filter 0.15s, transform 0.15s",
                   }}
                 />
+                {/* AI finding circles overlay */}
+                {report && (
+                  <FindingOverlay
+                    findings={report.findings ?? []}
+                    highlighted={highlighted}
+                    onHighlight={setHighlighted}
+                    zoom={zoom}
+                  />
+                )}
                 {report?.urgency && report.urgency !== "routine" && (
                   <div className="absolute top-3 right-3 pointer-events-none">
                     <UrgencyBadge urgency={report.urgency} />
@@ -1248,7 +1357,15 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                           Abnormal Findings
                           <span className="ml-2 normal-case font-normal text-gray-700">— tap a diagnosis to see its care plan</span>
                         </p>
-                        {abnormalFindings.map((f) => <FindingCard key={`${f.system}_${f.finding}`} finding={f} />)}
+                        {abnormalFindings.map((f, i) => (
+                          <FindingCard
+                            key={`${f.system}_${f.finding}`}
+                            finding={f}
+                            index={i}
+                            highlighted={highlighted}
+                            onHighlight={setHighlighted}
+                          />
+                        ))}
                       </div>
                     ) : normalFindings.length === 0 && (
                       <p className="text-sm text-gray-500 italic py-2 text-center">No specific findings identified — review impression above.</p>
