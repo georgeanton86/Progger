@@ -831,9 +831,20 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
+  const [markMode, setMarkMode]       = useState(false);
+  const [roi, setRoi]                 = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [roiDraft, setRoiDraft]       = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [roiAnalyzing, setRoiAnalyzing] = useState(false);
+  const [roiReport, setRoiReport]     = useState<RadiologyReport | null>(null);
+  const [roiError, setRoiError]       = useState<string | null>(null);
+
   const touchDistRef  = useRef<number | null>(null);
   const touchZoomRef  = useRef(100);
   const touchPanRef   = useRef<{ x: number; y: number } | null>(null);
+  const imageRef      = useRef<HTMLImageElement>(null);
+  const containerRef  = useRef<HTMLDivElement>(null);
+  const drawStartRef  = useRef<{ x: number; y: number } | null>(null);
+  const roiDraftRef   = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
 
   const [docLoading, setDocLoading] = useState(false);
   const [docResult, setDocResult]   = useState<DocumentExtraction | null>(null);
@@ -889,6 +900,11 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
     setZoom(100);
     setPan({ x: 0, y: 0 });
     setActivePreset("Standard");
+    setMarkMode(false);
+    setRoi(null);
+    setRoiDraft(null);
+    setRoiReport(null);
+    setRoiError(null);
   };
 
   // ── Gesture handlers ────────────────────────────────────────────────────────
@@ -900,6 +916,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (markMode) return;
     if (e.touches.length === 2) {
       touchDistRef.current  = getTouchDist(e.touches);
       touchZoomRef.current  = zoom;
@@ -912,6 +929,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
 
   const handleTouchMove = (e: React.TouchEvent) => {
     e.preventDefault();
+    if (markMode) return;
     if (e.touches.length === 2 && touchDistRef.current !== null) {
       const dist  = getTouchDist(e.touches);
       const scale = dist / touchDistRef.current;
@@ -933,6 +951,126 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
     e.preventDefault();
     setZoom(z => Math.min(500, Math.max(25, z + (e.deltaY < 0 ? 15 : -15))));
   };
+
+  // ── ROI markup handlers ─────────────────────────────────────────────────────
+
+  const handleMarkMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!markMode) return;
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    drawStartRef.current = { x, y };
+    const draft = { x1: x, y1: y, x2: x, y2: y };
+    roiDraftRef.current = draft;
+    setRoiDraft(draft);
+    setRoi(null);
+    setRoiReport(null);
+    setRoiError(null);
+  };
+
+  const handleMarkMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!markMode || !drawStartRef.current) return;
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    const s = drawStartRef.current;
+    const draft = { x1: Math.min(s.x, x), y1: Math.min(s.y, y), x2: Math.max(s.x, x), y2: Math.max(s.y, y) };
+    roiDraftRef.current = draft;
+    setRoiDraft(draft);
+  };
+
+  const handleMarkMouseUp = () => {
+    if (!markMode || !drawStartRef.current) return;
+    const draft = roiDraftRef.current;
+    drawStartRef.current = null;
+    roiDraftRef.current = null;
+    setRoiDraft(null);
+    if (draft && (draft.x2 - draft.x1) > 1.5 && (draft.y2 - draft.y1) > 1.5) {
+      setRoi(draft);
+    }
+  };
+
+  // Crop the marked region from the original image using Canvas
+  const cropRoi = useCallback((): Promise<string | null> => {
+    return new Promise(resolve => {
+      if (!roi || !imageUrl || !imageRef.current || !containerRef.current) {
+        resolve(null);
+        return;
+      }
+      const cr = containerRef.current.getBoundingClientRect();
+      const ir = imageRef.current.getBoundingClientRect();
+
+      const imgLeftF   = (ir.left   - cr.left) / cr.width;
+      const imgTopF    = (ir.top    - cr.top)  / cr.height;
+      const imgWidthF  = ir.width  / cr.width;
+      const imgHeightF = ir.height / cr.height;
+
+      const x1f = Math.max(0, (roi.x1 / 100 - imgLeftF) / imgWidthF);
+      const y1f = Math.max(0, (roi.y1 / 100 - imgTopF)  / imgHeightF);
+      const x2f = Math.min(1, (roi.x2 / 100 - imgLeftF) / imgWidthF);
+      const y2f = Math.min(1, (roi.y2 / 100 - imgTopF)  / imgHeightF);
+
+      if (x2f <= x1f || y2f <= y1f) { resolve(null); return; }
+
+      const img = new window.Image();
+      img.onload = () => {
+        const x1px = Math.round(x1f * img.naturalWidth);
+        const y1px = Math.round(y1f * img.naturalHeight);
+        const w    = Math.max(1, Math.round((x2f - x1f) * img.naturalWidth));
+        const h    = Math.max(1, Math.round((y2f - y1f) * img.naturalHeight));
+        const scale = Math.max(1, Math.min(6, 600 / Math.max(w, h)));
+        const canvas = document.createElement("canvas");
+        canvas.width  = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, x1px, y1px, w, h, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.92).split(",")[1]);
+      };
+      img.onerror = () => resolve(null);
+      img.src = imageUrl;
+    });
+  }, [roi, imageUrl]);
+
+  const analyzeRoi = useCallback(async () => {
+    if (!roi || !imageBase64) return;
+    setRoiAnalyzing(true);
+    setRoiError(null);
+    setRoiReport(null);
+    try {
+      const croppedBase64 = await cropRoi();
+      const base64ToSend = croppedBase64 ?? imageBase64;
+      const roiCtx = `FOCUSED ROI INSPECTION — provider has marked a specific region for detailed second-look analysis${croppedBase64 ? ". The cropped sub-image is provided for magnified inspection." : ` (approx. ${Math.round(roi.x1)}–${Math.round(roi.x2)}% H, ${Math.round(roi.y1)}–${Math.round(roi.y2)}% V on the original image).`} Look carefully for any subtle findings, early pathology, edge findings, or anything that may have been overlooked on first pass. This is a targeted inspection.${clinicalContext ? `\n\nClinical context: ${clinicalContext}` : ""}`;
+      const res = await fetch("/api/radiology", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image: base64ToSend,
+          mediaType: croppedBase64 ? "image/jpeg" : mediaType,
+          mode: "radiology",
+          modality,
+          patientAge,
+          patientSex,
+          clinicalQuestion: clinicalQuestion || "Focused ROI second-look — identify any subtle or early pathology",
+          clinicalContext: roiCtx,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({ error: "API error" }));
+        throw new Error(d.error || "ROI analysis failed");
+      }
+      const d = await res.json();
+      const parsed = parseJSON<RadiologyReport>(d.reply);
+      if (!parsed) throw new Error("Could not parse ROI analysis — please retry");
+      setRoiReport(parsed);
+    } catch (e) {
+      setRoiError(e instanceof Error ? e.message : "ROI analysis failed");
+    } finally {
+      setRoiAnalyzing(false);
+    }
+  }, [roi, imageBase64, cropRoi, modality, patientAge, patientSex, clinicalQuestion, clinicalContext, mediaType]);
 
   // ── Analysis ────────────────────────────────────────────────────────────────
 
@@ -1208,14 +1346,20 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
             {/* ── Image panel ── */}
             <div className="w-full lg:w-[44%] border-b lg:border-b-0 lg:border-r border-gray-800 flex flex-col bg-black overflow-hidden">
               <div
+                ref={containerRef}
                 className="flex-1 relative flex items-center justify-center bg-black overflow-hidden min-h-48 select-none"
-                style={{ touchAction: "none", cursor: zoom > 105 ? "grab" : "crosshair" }}
+                style={{ touchAction: "none", cursor: markMode ? "crosshair" : zoom > 105 ? "grab" : "default" }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onWheel={handleWheel}
+                onMouseDown={handleMarkMouseDown}
+                onMouseMove={handleMarkMouseMove}
+                onMouseUp={handleMarkMouseUp}
+                onMouseLeave={handleMarkMouseUp}
               >
                 <img
+                  ref={imageRef}
                   src={imageUrl}
                   alt="Medical imaging"
                   draggable={false}
@@ -1239,6 +1383,32 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                     pan={pan}
                   />
                 )}
+                {/* ROI markup rectangle */}
+                {(roi || roiDraft) && (() => {
+                  const r = roi ?? roiDraft!;
+                  return (
+                    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 25 }}>
+                      <div
+                        className="absolute"
+                        style={{
+                          left: `${r.x1}%`,
+                          top: `${r.y1}%`,
+                          width: `${r.x2 - r.x1}%`,
+                          height: `${r.y2 - r.y1}%`,
+                          border: roi ? "2px solid #facc15" : "2px dashed #facc15",
+                          backgroundColor: "rgba(250,204,21,0.07)",
+                          boxShadow: roi ? "0 0 0 1px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(250,204,21,0.25)" : "none",
+                        }}
+                      >
+                        {roi && (
+                          <div className="absolute -top-5 left-0 text-xs text-amber-300 font-extrabold bg-black/80 px-1.5 py-0.5 rounded leading-none whitespace-nowrap">
+                            🔍 ROI
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {report?.urgency && report.urgency !== "routine" && (
                   <div className="absolute top-3 right-3 pointer-events-none">
                     <UrgencyBadge urgency={report.urgency} />
@@ -1251,7 +1421,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
 
               {/* Enhancement controls */}
               <div className="bg-gray-950 border-t border-gray-800 p-3 flex-shrink-0 space-y-2.5">
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-1 flex-wrap items-center">
                   {Object.keys(PRESETS).map(p => (
                     <button key={p} onClick={() => applyPreset(p)} className={cn(
                       "text-xs px-2.5 py-1 rounded-lg border transition-colors",
@@ -1260,6 +1430,19 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                         : "border-gray-700 text-gray-500 hover:border-gray-500 hover:text-white"
                     )}>{p}</button>
                   ))}
+                  <div className="w-px h-4 bg-gray-700 mx-0.5" />
+                  <button
+                    onClick={() => { setMarkMode(m => !m); if (markMode) { setRoi(null); setRoiDraft(null); } }}
+                    className={cn(
+                      "text-xs px-2.5 py-1 rounded-lg border transition-colors font-semibold",
+                      markMode
+                        ? "bg-amber-600/80 border-amber-500 text-white"
+                        : "border-gray-700 text-gray-400 hover:border-amber-600/60 hover:text-amber-400"
+                    )}
+                    title="Draw a region of interest on the image, then run a focused AI analysis on that area"
+                  >
+                    {markMode ? "✕ Cancel Mark" : "✏️ Mark ROI"}
+                  </button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -1288,6 +1471,68 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                   >Reset</button>
                 </div>
               </div>
+              {/* ROI panel */}
+              {(markMode || roi || roiAnalyzing || roiReport || roiError) && (
+                <div className="border-t border-amber-700/30 bg-amber-950/10 px-3 py-2.5 flex-shrink-0 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-extrabold text-amber-400 flex items-center gap-1.5">
+                      🔍 Region of Interest
+                      {markMode && !roi && (
+                        <span className="font-normal text-amber-600">— drag to mark area on image</span>
+                      )}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {roi && !roiAnalyzing && (
+                        <button
+                          onClick={analyzeRoi}
+                          className="text-xs px-3 py-1 rounded-lg bg-amber-600/70 hover:bg-amber-500/80 border border-amber-500/50 text-white font-bold transition-colors flex items-center gap-1"
+                        >
+                          Inspect ROI →
+                        </button>
+                      )}
+                      {roi && (
+                        <button
+                          onClick={() => { setRoi(null); setRoiReport(null); setRoiError(null); }}
+                          className="text-xs text-gray-600 hover:text-white transition-colors"
+                          title="Clear marked region"
+                        >✕</button>
+                      )}
+                    </div>
+                  </div>
+
+                  {roiAnalyzing && (
+                    <div className="flex items-center gap-2 text-xs text-amber-300">
+                      <div className="w-3 h-3 rounded-full border-2 border-amber-400 border-t-transparent animate-spin flex-shrink-0" />
+                      Running focused inspection on marked region…
+                    </div>
+                  )}
+                  {roiError && (
+                    <p className="text-xs text-red-400">⚠ {roiError}</p>
+                  )}
+                  {roiReport && !roiAnalyzing && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-gray-300 leading-relaxed">{roiReport.impression}</p>
+                      {roiReport.findings.filter(f => f.abnormal).length > 0 ? (
+                        roiReport.findings.filter(f => f.abnormal).map((f, i) => (
+                          <div key={i} className="text-xs px-2.5 py-1.5 rounded-lg bg-amber-900/25 border border-amber-700/40">
+                            <span className="font-bold text-amber-300">{f.system}:</span>
+                            <span className="text-gray-300 ml-1">{f.finding}</span>
+                            {f.severity !== "normal" && (
+                              <span className={cn("ml-1.5 font-bold",
+                                f.severity === "critical" || f.severity === "severe" ? "text-red-400" : "text-amber-400"
+                              )}>({f.severity})</span>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-green-400 flex items-center gap-1.5">
+                          <span>✓</span> No abnormalities identified in marked region
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* ── Right panel: Context / Loading / Report ── */}
