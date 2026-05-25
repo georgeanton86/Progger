@@ -245,11 +245,13 @@ function FindingOverlay({
   highlighted,
   onHighlight,
   zoom,
+  pan,
 }: {
   findings: RadiologyFinding[];
   highlighted: string | null;
   onHighlight: (key: string | null) => void;
   zoom: number;
+  pan: { x: number; y: number };
 }) {
   const annotated = findings.filter(f => f.abnormal && f.imageLocation);
   if (!annotated.length) return null;
@@ -257,7 +259,7 @@ function FindingOverlay({
   return (
     <div
       className="absolute inset-0 pointer-events-none"
-      style={{ transform: `scale(${zoom / 100})`, transformOrigin: "center" }}
+      style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom / 100})`, transformOrigin: "center" }}
     >
       {annotated.map((f, i) => {
         const key = `${f.system}_${f.finding}`;
@@ -827,6 +829,11 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   const [report, setReport]       = useState<RadiologyReport | null>(null);
   const [error, setError]         = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+
+  const touchDistRef  = useRef<number | null>(null);
+  const touchZoomRef  = useRef(100);
+  const touchPanRef   = useRef<{ x: number; y: number } | null>(null);
 
   const [docLoading, setDocLoading] = useState(false);
   const [docResult, setDocResult]   = useState<DocumentExtraction | null>(null);
@@ -880,7 +887,51 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
     setContrast(100);
     setInverted(false);
     setZoom(100);
+    setPan({ x: 0, y: 0 });
     setActivePreset("Standard");
+  };
+
+  // ── Gesture handlers ────────────────────────────────────────────────────────
+
+  const getTouchDist = (touches: React.TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      touchDistRef.current  = getTouchDist(e.touches);
+      touchZoomRef.current  = zoom;
+      touchPanRef.current   = null;
+    } else if (e.touches.length === 1) {
+      touchPanRef.current  = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      touchDistRef.current = null;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    if (e.touches.length === 2 && touchDistRef.current !== null) {
+      const dist  = getTouchDist(e.touches);
+      const scale = dist / touchDistRef.current;
+      setZoom(Math.min(500, Math.max(25, touchZoomRef.current * scale)));
+    } else if (e.touches.length === 1 && touchPanRef.current) {
+      const dx = e.touches[0].clientX - touchPanRef.current.x;
+      const dy = e.touches[0].clientY - touchPanRef.current.y;
+      setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+      touchPanRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchDistRef.current = null;
+    touchPanRef.current  = null;
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    setZoom(z => Math.min(500, Math.max(25, z + (e.deltaY < 0 ? 15 : -15))));
   };
 
   // ── Analysis ────────────────────────────────────────────────────────────────
@@ -1156,19 +1207,26 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
 
             {/* ── Image panel ── */}
             <div className="w-full lg:w-[44%] border-b lg:border-b-0 lg:border-r border-gray-800 flex flex-col bg-black overflow-hidden">
-              <div className="flex-1 relative flex items-center justify-center bg-black overflow-hidden min-h-48 cursor-crosshair select-none">
+              <div
+                className="flex-1 relative flex items-center justify-center bg-black overflow-hidden min-h-48 select-none"
+                style={{ touchAction: "none", cursor: zoom > 105 ? "grab" : "crosshair" }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onWheel={handleWheel}
+              >
                 <img
                   src={imageUrl}
                   alt="Medical imaging"
                   draggable={false}
                   style={{
                     filter: `brightness(${brightness}%) contrast(${contrast}%)${inverted ? " invert(100%)" : ""}`,
-                    transform: `scale(${zoom / 100})`,
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom / 100})`,
                     transformOrigin: "center",
                     maxWidth: "100%",
                     maxHeight: "100%",
                     objectFit: "contain",
-                    transition: "filter 0.15s, transform 0.15s",
+                    transition: "filter 0.15s",
                   }}
                 />
                 {/* AI finding circles overlay */}
@@ -1178,6 +1236,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                     highlighted={highlighted}
                     onHighlight={setHighlighted}
                     zoom={zoom}
+                    pan={pan}
                   />
                 )}
                 {report?.urgency && report.urgency !== "routine" && (
@@ -1224,7 +1283,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                       className="w-full h-1.5 accent-teal-500" />
                   </div>
                   <button
-                    onClick={() => { applyPreset("Standard"); setZoom(100); }}
+                    onClick={() => { applyPreset("Standard"); setZoom(100); setPan({ x: 0, y: 0 }); }}
                     className="text-xs text-gray-600 hover:text-white px-2.5 py-1.5 rounded-lg border border-gray-700 hover:border-gray-500 flex-shrink-0 transition-colors"
                   >Reset</button>
                 </div>
