@@ -51,21 +51,26 @@ export async function POST(req: NextRequest) {
   const { prompt, context, stream: useStream } = await req.json();
   const fullPrompt = context ? `Context:\n${context}\n\nTask: ${prompt}` : prompt;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2200,
-      stream: !!useStream,
-      system: systemPrompt,
-      messages: [{ role: "user", content: fullPrompt }],
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2200,
+        stream: !!useStream,
+        system: systemPrompt,
+        messages: [{ role: "user", content: fullPrompt }],
+      }),
+    });
+  } catch (err) {
+    return NextResponse.json({ error: `Network error reaching AI: ${String(err).slice(0, 200)}` }, { status: 502 });
+  }
 
   if (!response.ok) {
     const errBody = await response.text().catch(() => "");

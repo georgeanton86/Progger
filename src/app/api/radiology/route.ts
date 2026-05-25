@@ -67,18 +67,20 @@ export async function POST(req: NextRequest) {
 
 Systematically analyze this image following the ABCDE (or equivalent) approach. Apply all evidence-based criteria. Follow MANDATORY CARE PLAN RULES strictly — every abnormal finding MUST have 2-4 differentials with exact confidence %, specific drug/dose/route/frequency/duration treatments, disposition, follow-up with timeframe, and referral. Include imageLocation for every finding. Return ONLY valid JSON.`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{
+  let response: Response;
+  try {
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{
         role: "user",
         content: [
           {
@@ -92,8 +94,11 @@ Systematically analyze this image following the ABCDE (or equivalent) approach. 
           { type: "text", text: userText },
         ],
       }],
-    }),
-  });
+      }),
+    });
+  } catch (err) {
+    return NextResponse.json({ error: `Network error reaching AI: ${String(err).slice(0, 200)}` }, { status: 502 });
+  }
 
   if (!response.ok) {
     const err = await response.text().catch(() => "");

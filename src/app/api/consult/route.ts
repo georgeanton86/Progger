@@ -481,21 +481,26 @@ TEACHING_PEARL: [High-yield teaching point from this specific case — suitable 
     ? `CASE:\n${caseContext}\n\nSPECIFIC QUESTION FOR YOU: ${question}\n\nPlease provide your specialty consultation.`
     : `CASE:\n${caseContext}\n\nPlease provide your specialty consultation using the required format.`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 3000,
-      stream: true,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 3000,
+        stream: true,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+    });
+  } catch (err) {
+    return NextResponse.json({ error: `Network error reaching AI: ${String(err).slice(0, 200)}` }, { status: 502 });
+  }
 
   if (!response.ok) {
     const err = await response.text().catch(() => "");
