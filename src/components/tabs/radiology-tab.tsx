@@ -917,7 +917,22 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (markMode) return;
+    if (markMode) {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+        const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+        const x = ((e.touches[0].clientX - rect.left) / rect.width) * 100;
+        const y = ((e.touches[0].clientY - rect.top) / rect.height) * 100;
+        drawStartRef.current = { x, y };
+        const draft = { x1: x, y1: y, x2: x, y2: y };
+        roiDraftRef.current = draft;
+        setRoiDraft(draft);
+        setRoi(null);
+        setRoiReport(null);
+        setRoiError(null);
+      }
+      return;
+    }
     if (e.touches.length === 2) {
       touchDistRef.current  = getTouchDist(e.touches);
       touchZoomRef.current  = zoom;
@@ -930,7 +945,18 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
 
   const handleTouchMove = (e: React.TouchEvent) => {
     e.preventDefault();
-    if (markMode) return;
+    if (markMode) {
+      if (e.touches.length === 1 && drawStartRef.current) {
+        const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+        const x = Math.max(0, Math.min(100, ((e.touches[0].clientX - rect.left) / rect.width) * 100));
+        const y = Math.max(0, Math.min(100, ((e.touches[0].clientY - rect.top) / rect.height) * 100));
+        const s = drawStartRef.current;
+        roiDraftRef.current = { x1: Math.min(s.x, x), y1: Math.min(s.y, y), x2: Math.max(s.x, x), y2: Math.max(s.y, y) };
+        if (rafRef.current !== null) return;
+        rafRef.current = requestAnimationFrame(() => { rafRef.current = null; setRoiDraft(roiDraftRef.current); });
+      }
+      return;
+    }
     if (rafRef.current !== null) return;
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null;
@@ -948,6 +974,14 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   };
 
   const handleTouchEnd = () => {
+    if (markMode) {
+      const draft = roiDraftRef.current;
+      drawStartRef.current = null;
+      roiDraftRef.current  = null;
+      setRoiDraft(null);
+      if (draft && (draft.x2 - draft.x1) > 1.5 && (draft.y2 - draft.y1) > 1.5) setRoi(draft);
+      return;
+    }
     touchDistRef.current = null;
     touchPanRef.current  = null;
     if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
