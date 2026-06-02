@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, memo } from "react";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -368,7 +368,7 @@ function DispositionBadge({ disposition }: { disposition: CarePlanOption["dispos
 
 // ── Differential card: big confidence number + inline care plan ───────────────
 
-function DifferentialCard({
+const DifferentialCard = memo(function DifferentialCard({
   dx, finding, selected, onSelect,
 }: {
   dx: CarePlanOption;
@@ -473,11 +473,11 @@ function DifferentialCard({
       )}
     </div>
   );
-}
+});
 
 // ── Finding card: always shows differentials for abnormal findings ─────────────
 
-function FindingCard({ finding, index, highlighted, onHighlight }: {
+const FindingCard = memo(function FindingCard({ finding, index, highlighted, onHighlight }: {
   finding: RadiologyFinding;
   index: number;
   highlighted: string | null;
@@ -547,7 +547,7 @@ function FindingCard({ finding, index, highlighted, onHighlight }: {
       )}
     </div>
   );
-}
+});
 
 // ── Normal findings drawer ────────────────────────────────────────────────────
 
@@ -845,6 +845,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   const containerRef  = useRef<HTMLDivElement>(null);
   const drawStartRef  = useRef<{ x: number; y: number } | null>(null);
   const roiDraftRef   = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const rafRef        = useRef<number | null>(null);
 
   const [docLoading, setDocLoading] = useState(false);
   const [docResult, setDocResult]   = useState<DocumentExtraction | null>(null);
@@ -930,26 +931,35 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   const handleTouchMove = (e: React.TouchEvent) => {
     e.preventDefault();
     if (markMode) return;
-    if (e.touches.length === 2 && touchDistRef.current !== null) {
-      const dist  = getTouchDist(e.touches);
-      const scale = dist / touchDistRef.current;
-      setZoom(Math.min(500, Math.max(25, touchZoomRef.current * scale)));
-    } else if (e.touches.length === 1 && touchPanRef.current) {
-      const dx = e.touches[0].clientX - touchPanRef.current.x;
-      const dy = e.touches[0].clientY - touchPanRef.current.y;
-      setPan(p => ({ x: p.x + dx, y: p.y + dy }));
-      touchPanRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    }
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      if (e.touches.length === 2 && touchDistRef.current !== null) {
+        const dist  = getTouchDist(e.touches);
+        const scale = dist / touchDistRef.current;
+        setZoom(Math.min(500, Math.max(25, touchZoomRef.current * scale)));
+      } else if (e.touches.length === 1 && touchPanRef.current) {
+        const dx = e.touches[0].clientX - touchPanRef.current.x;
+        const dy = e.touches[0].clientY - touchPanRef.current.y;
+        setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+        touchPanRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    });
   };
 
   const handleTouchEnd = () => {
     touchDistRef.current = null;
     touchPanRef.current  = null;
+    if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
   };
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    setZoom(z => Math.min(500, Math.max(25, z + (e.deltaY < 0 ? 15 : -15))));
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      setZoom(z => Math.min(500, Math.max(25, z + (e.deltaY < 0 ? 15 : -15))));
+    });
   };
 
   // ── ROI markup handlers ─────────────────────────────────────────────────────
@@ -976,9 +986,12 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
     const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
     const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
     const s = drawStartRef.current;
-    const draft = { x1: Math.min(s.x, x), y1: Math.min(s.y, y), x2: Math.max(s.x, x), y2: Math.max(s.y, y) };
-    roiDraftRef.current = draft;
-    setRoiDraft(draft);
+    roiDraftRef.current = { x1: Math.min(s.x, x), y1: Math.min(s.y, y), x2: Math.max(s.x, x), y2: Math.max(s.y, y) };
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      setRoiDraft(roiDraftRef.current);
+    });
   };
 
   const handleMarkMouseUp = () => {
