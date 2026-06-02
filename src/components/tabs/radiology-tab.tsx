@@ -549,6 +549,25 @@ const FindingCard = memo(function FindingCard({ finding, index, highlighted, onH
   );
 });
 
+// ── Expandable text (impression etc.) ────────────────────────────────────────
+
+function ExpandableText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > 300 || text.split("\n").length > 4;
+  if (!isLong) return <p className="text-sm text-gray-100 leading-relaxed whitespace-pre-line">{text}</p>;
+  return (
+    <div>
+      <p className={cn("text-sm text-gray-100 leading-relaxed whitespace-pre-line", !expanded && "line-clamp-4")}>{text}</p>
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="text-xs text-blue-400 hover:text-blue-300 mt-1.5 font-semibold transition-colors"
+      >
+        {expanded ? "Show less ▲" : "Show more ▼"}
+      </button>
+    </div>
+  );
+}
+
 // ── Normal findings drawer ────────────────────────────────────────────────────
 
 function NormalFindingsSection({ findings }: { findings: RadiologyFinding[] }) {
@@ -838,14 +857,18 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   const [roiReport, setRoiReport]     = useState<RadiologyReport | null>(null);
   const [roiError, setRoiError]       = useState<string | null>(null);
 
+  const [measureMode, setMeasureMode] = useState(false);
+  const [measurePts, setMeasurePts]   = useState<{ x: number; y: number }[]>([]);
+
   const touchDistRef  = useRef<number | null>(null);
   const touchZoomRef  = useRef(100);
   const touchPanRef   = useRef<{ x: number; y: number } | null>(null);
   const imageRef      = useRef<HTMLImageElement>(null);
   const containerRef  = useRef<HTMLDivElement>(null);
   const drawStartRef  = useRef<{ x: number; y: number } | null>(null);
-  const roiDraftRef   = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const rafRef        = useRef<number | null>(null);
+  const roiDraftRef    = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const rafRef         = useRef<number | null>(null);
+  const measureTouchRef = useRef<{ x: number; y: number } | null>(null);
 
   const [docLoading, setDocLoading] = useState(false);
   const [docResult, setDocResult]   = useState<DocumentExtraction | null>(null);
@@ -906,6 +929,8 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
     setRoiDraft(null);
     setRoiReport(null);
     setRoiError(null);
+    setMeasureMode(false);
+    setMeasurePts([]);
   };
 
   // ── Gesture handlers ────────────────────────────────────────────────────────
@@ -917,6 +942,14 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (measureMode && e.touches.length === 1) {
+      const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+      measureTouchRef.current = {
+        x: ((e.touches[0].clientX - rect.left) / rect.width) * 100,
+        y: ((e.touches[0].clientY - rect.top) / rect.height) * 100,
+      };
+      return;
+    }
     if (markMode) {
       if (e.touches.length === 1) {
         e.preventDefault();
@@ -974,6 +1007,12 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   };
 
   const handleTouchEnd = () => {
+    if (measureMode && measureTouchRef.current) {
+      const pt = measureTouchRef.current;
+      measureTouchRef.current = null;
+      setMeasurePts(pts => pts.length >= 2 ? [pt] : [...pts, pt]);
+      return;
+    }
     if (markMode) {
       const draft = roiDraftRef.current;
       drawStartRef.current = null;
@@ -998,8 +1037,16 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
 
   // ── ROI markup handlers ─────────────────────────────────────────────────────
 
+  const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!measureMode) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setMeasurePts(pts => pts.length >= 2 ? [{ x, y }] : [...pts, { x, y }]);
+  };
+
   const handleMarkMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!markMode) return;
+    if (!markMode || measureMode) return;
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -1089,7 +1136,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
     try {
       const croppedBase64 = await cropRoi();
       const base64ToSend = croppedBase64 ?? imageBase64;
-      const roiCtx = `FOCUSED ROI INSPECTION — provider has marked a specific region for detailed second-look analysis${croppedBase64 ? ". The cropped sub-image is provided for magnified inspection." : ` (approx. ${Math.round(roi.x1)}–${Math.round(roi.x2)}% H, ${Math.round(roi.y1)}–${Math.round(roi.y2)}% V on the original image).`} Look carefully for any subtle findings, early pathology, edge findings, or anything that may have been overlooked on first pass. This is a targeted inspection.${clinicalContext ? `\n\nClinical context: ${clinicalContext}` : ""}`;
+      const roiCtx = `FOCUSED ROI INSPECTION — provider has marked a specific region for detailed second-look analysis${croppedBase64 ? ". The cropped sub-image is provided for magnified inspection." : ` (approx. ${Math.round(roi.x1)}–${Math.round(roi.x2)}% H, ${Math.round(roi.y1)}–${Math.round(roi.y2)}% V on the original image).`} Look carefully for any subtle findings, early pathology, edge findings, or anything that may have been overlooked on first pass. This is a targeted inspection.${clinicalContext ? `\n\nClinical context: ${clinicalContext}` : ""}${buildMeasureContext()}`;
       const res = await fetch("/api/radiology", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1121,6 +1168,13 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
 
   // ── Analysis ────────────────────────────────────────────────────────────────
 
+  const buildMeasureContext = () => {
+    if (measurePts.length !== 2) return "";
+    const [a, b] = measurePts;
+    const dist = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+    return `\n\nClinician has placed measurement markers: Point A at (${a.x.toFixed(1)}%, ${a.y.toFixed(1)}%) and Point B at (${b.x.toFixed(1)}%, ${b.y.toFixed(1)}%) of the image area. Relative distance = ${dist.toFixed(1)}% of image diagonal. Please estimate the anatomical structure being measured (e.g. disc height, joint space, cardiac diameter) and comment on whether it appears within normal limits.`;
+  };
+
   const analyze = async () => {
     if (!imageBase64) return;
     setAnalyzing(true);
@@ -1129,10 +1183,11 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
     setGrSent(false);
     setHighlighted(null);
     try {
+      const ctx = clinicalContext + buildMeasureContext();
       const res = await fetch("/api/radiology", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: imageBase64, mediaType, mode: "radiology", modality, patientAge, patientSex, clinicalQuestion, clinicalContext }),
+        body: JSON.stringify({ image: imageBase64, mediaType, mode: "radiology", modality, patientAge, patientSex, clinicalQuestion, clinicalContext: ctx }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({ error: "API error" }));
@@ -1330,11 +1385,13 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
         {!imageUrl ? (
 
           /* ── Upload zone ──────────────────────────────────────────────────── */
-          <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center p-6 gap-5">
+          <div
+            className="flex-1 overflow-y-auto flex flex-col items-center justify-center p-6 gap-5"
+            onDragOver={e => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false); }}
+            onDrop={handleDrop}
+          >
             <div
-              onDragOver={e => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
               className={cn(
                 "w-full max-w-2xl border-2 border-dashed rounded-2xl p-12 flex flex-col items-center gap-5 cursor-pointer transition-all",
@@ -1395,11 +1452,12 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
               <div
                 ref={containerRef}
                 className="flex-1 relative flex items-center justify-center bg-black overflow-hidden min-h-48 select-none"
-                style={{ touchAction: "none", cursor: markMode ? "crosshair" : zoom > 105 ? "grab" : "default" }}
+                style={{ touchAction: "none", cursor: measureMode ? "cell" : markMode ? "crosshair" : zoom > 105 ? "grab" : "default" }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onWheel={handleWheel}
+                onClick={handleContainerClick}
                 onMouseDown={handleMarkMouseDown}
                 onMouseMove={handleMarkMouseMove}
                 onMouseUp={handleMarkMouseUp}
@@ -1456,6 +1514,38 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                     </div>
                   );
                 })()}
+                {/* Measurement overlay */}
+                {measurePts.length > 0 && (
+                  <svg className="absolute inset-0 pointer-events-none" width="100%" height="100%" style={{ zIndex: 30 }}>
+                    {measurePts.length === 2 && (() => {
+                      const [a, b] = measurePts;
+                      const mx = (a.x + b.x) / 2;
+                      const my = (a.y + b.y) / 2;
+                      const dist = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+                      return (
+                        <>
+                          <line x1={`${a.x}%`} y1={`${a.y}%`} x2={`${b.x}%`} y2={`${b.y}%`}
+                            stroke="#34d399" strokeWidth="1.5" strokeDasharray="5 3" />
+                          <rect x={`${mx - 4}%`} y={`${my - 2.5}%`} width="8%" height="5%"
+                            rx="3" fill="rgba(0,0,0,0.82)" />
+                          <text x={`${mx}%`} y={`${my + 0.8}%`}
+                            textAnchor="middle" dominantBaseline="middle"
+                            fill="#34d399" fontSize="10" fontWeight="bold">
+                            📏 {dist.toFixed(1)}%
+                          </text>
+                        </>
+                      );
+                    })()}
+                    {measurePts.map((pt, i) => (
+                      <g key={i}>
+                        <circle cx={`${pt.x}%`} cy={`${pt.y}%`} r="6"
+                          fill="rgba(52,211,153,0.15)" stroke="#34d399" strokeWidth="2" />
+                        <text x={`${pt.x + 1.5}%`} y={`${pt.y - 1.5}%`}
+                          fill="#34d399" fontSize="9" fontWeight="bold">{i === 0 ? "A" : "B"}</text>
+                      </g>
+                    ))}
+                  </svg>
+                )}
                 {report?.urgency && report.urgency !== "routine" && (
                   <div className="absolute top-3 right-3 pointer-events-none">
                     <UrgencyBadge urgency={report.urgency} />
@@ -1479,17 +1569,35 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                   ))}
                   <div className="w-px h-4 bg-gray-700 mx-0.5" />
                   <button
-                    onClick={() => { setMarkMode(m => !m); if (markMode) { setRoi(null); setRoiDraft(null); } }}
+                    onClick={() => { setMarkMode(m => !m); setMeasureMode(false); if (markMode) { setRoi(null); setRoiDraft(null); } }}
                     className={cn(
                       "text-xs px-2.5 py-1 rounded-lg border transition-colors font-semibold",
                       markMode
                         ? "bg-amber-600/80 border-amber-500 text-white"
                         : "border-gray-700 text-gray-400 hover:border-amber-600/60 hover:text-amber-400"
                     )}
-                    title="Draw a region of interest on the image, then run a focused AI analysis on that area"
+                    title="Draw a region of interest for focused AI analysis"
                   >
-                    {markMode ? "✕ Cancel Mark" : "✏️ Mark ROI"}
+                    {markMode ? "✕ Cancel" : "✏️ Mark ROI"}
                   </button>
+                  <button
+                    onClick={() => { setMeasureMode(m => !m); setMarkMode(false); if (measureMode) setMeasurePts([]); }}
+                    className={cn(
+                      "text-xs px-2.5 py-1 rounded-lg border transition-colors font-semibold",
+                      measureMode
+                        ? "bg-emerald-700/80 border-emerald-500 text-white"
+                        : "border-gray-700 text-gray-400 hover:border-emerald-600/60 hover:text-emerald-400"
+                    )}
+                    title="Tap two points to measure disc spacing, bone gaps, CTR, etc."
+                  >
+                    {measureMode ? "✕ Cancel" : "📏 Measure"}
+                  </button>
+                  {measurePts.length > 0 && (
+                    <button onClick={() => setMeasurePts([])}
+                      className="text-xs text-gray-600 hover:text-white transition-colors px-1">
+                      ✕
+                    </button>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -1557,7 +1665,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                     <p className="text-xs text-red-400">⚠ {roiError}</p>
                   )}
                   {roiReport && !roiAnalyzing && (
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 max-h-44 overflow-y-auto">
                       <p className="text-xs text-gray-300 leading-relaxed">{roiReport.impression}</p>
                       {roiReport.findings.filter(f => f.abnormal).length > 0 ? (
                         roiReport.findings.filter(f => f.abnormal).map((f, i) => (
@@ -1698,7 +1806,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                     {/* Impression */}
                     <div className="p-4 rounded-2xl bg-blue-950/25 border border-blue-700/40">
                       <p className="text-xs font-extrabold text-blue-400 uppercase tracking-widest mb-2">Impression</p>
-                      <p className="text-sm text-gray-100 leading-relaxed whitespace-pre-line">{report.impression}</p>
+                      <ExpandableText text={report.impression} />
                     </div>
 
                     {/* Abnormal findings with care plans */}
