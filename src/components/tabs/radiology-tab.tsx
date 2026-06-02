@@ -19,7 +19,7 @@ type RadiologyFinding = {
   finding: string;
   abnormal: boolean;
   severity: "normal" | "mild" | "moderate" | "severe" | "critical";
-  imageLocation?: { x: number; y: number };
+  imageLocation?: { x: number; y: number; w?: number; h?: number };
   differentials?: CarePlanOption[];
 };
 
@@ -238,7 +238,7 @@ function flagColor(flag: string) {
          flag === "high" || flag === "low" ? "text-amber-400 font-bold" : "text-green-400";
 }
 
-// ── Finding overlay (circles on the image) ────────────────────────────────────
+// ── Finding overlay (bounding box highlights on the image) ───────────────────
 
 function FindingOverlay({
   findings,
@@ -264,7 +264,13 @@ function FindingOverlay({
       {annotated.map((f, i) => {
         const key = `${f.system}_${f.finding}`;
         const active = highlighted === key;
-        const ringColor =
+        const loc = f.imageLocation!;
+        const w = loc.w ?? 12;
+        const h = loc.h ?? 12;
+        const left = loc.x - w / 2;
+        const top  = loc.y - h / 2;
+
+        const color =
           f.severity === "critical" ? "#ef4444" :
           f.severity === "severe"   ? "#f97316" :
           f.severity === "moderate" ? "#f59e0b" : "#eab308";
@@ -273,43 +279,42 @@ function FindingOverlay({
           <div
             key={key}
             className="absolute pointer-events-auto cursor-pointer group"
-            style={{
-              left: `${f.imageLocation!.x}%`,
-              top:  `${f.imageLocation!.y}%`,
-              transform: "translate(-50%, -50%)",
-              zIndex: active ? 20 : 10,
-            }}
+            style={{ left: `${left}%`, top: `${top}%`, width: `${w}%`, height: `${h}%`, zIndex: active ? 20 : 10 }}
             onClick={() => onHighlight(active ? null : key)}
           >
-            {/* Outer pulsing ring — always on for critical, on-hover/active otherwise */}
+            {/* Highlight box */}
             <div
               className={cn(
-                "absolute rounded-full border-2 transition-all duration-300",
-                f.severity === "critical" || active ? "animate-ping" : "opacity-0 group-hover:opacity-100 group-hover:animate-ping"
+                "absolute inset-0 rounded-sm transition-all duration-300",
+                f.severity === "critical" ? "animate-pulse" : ""
               )}
               style={{
-                borderColor: ringColor,
-                width: 52, height: 52,
-                top: -10, left: -10,
-                opacity: active ? 0.6 : 0.4,
+                backgroundColor: active ? `${color}22` : `${color}0d`,
+                border: `${active ? 2 : 1.5}px ${active ? "solid" : "dashed"} ${color}`,
+                boxShadow: active
+                  ? `inset 0 0 0 1px ${color}30, 0 0 14px ${color}50`
+                  : `0 0 4px ${color}30`,
               }}
             />
-            {/* Main annotation circle */}
+
+            {/* Number badge — top-left corner of box */}
             <div
-              className="relative w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-200"
+              className="absolute -top-3 -left-3 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-black transition-all duration-200"
               style={{
-                borderColor: ringColor,
-                backgroundColor: active ? `${ringColor}30` : "rgba(0,0,0,0.45)",
-                boxShadow: active ? `0 0 16px ${ringColor}70, 0 0 4px ${ringColor}` : `0 0 6px ${ringColor}50`,
+                borderColor: color,
+                backgroundColor: active ? `${color}40` : "rgba(0,0,0,0.80)",
+                color,
+                boxShadow: active ? `0 0 10px ${color}80` : `0 0 4px ${color}50`,
               }}
             >
-              <span className="text-xs font-black" style={{ color: ringColor }}>{i + 1}</span>
+              {i + 1}
             </div>
-            {/* Tooltip label on hover */}
+
+            {/* Severity label — appears on hover or when active */}
             <div className={cn(
-              "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap px-2 py-1 rounded-lg text-xs font-semibold text-white bg-gray-900/95 border pointer-events-none transition-opacity duration-150",
+              "absolute -bottom-6 left-0 whitespace-nowrap px-2 py-0.5 rounded text-xs font-bold text-white bg-gray-900/95 border pointer-events-none transition-opacity duration-150",
               active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-            )} style={{ borderColor: ringColor }}>
+            )} style={{ borderColor: color, color }}>
               {f.system}
             </div>
           </div>
