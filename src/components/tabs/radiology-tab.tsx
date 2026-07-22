@@ -1,6 +1,8 @@
 "use client";
 import { useState, useRef, useCallback, useEffect, memo } from "react";
 import { cn } from "@/lib/utils";
+import { CMEQuizModal } from "@/components/cme/CMEQuizModal";
+import { CMEWalletWidget } from "@/components/cme/CMEWalletWidget";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -882,6 +884,11 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
   const [grDismissed, setGrDismissed] = useState(false);
   const [grSent, setGrSent]           = useState(false);
 
+  const [showCME, setShowCME]       = useState(false);
+  const [cmePearl, setCmePearl]     = useState("");
+  const [cmeTopic, setCmeTopic]     = useState("");
+  const [cmeRefresh, setCmeRefresh] = useState(0);
+
   // ── File loading ────────────────────────────────────────────────────────────
 
   const loadFile = useCallback((file: File) => {
@@ -1171,6 +1178,20 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
     }
   }, [roi, imageBase64, cropRoi, modality, patientAge, patientSex, clinicalQuestion, clinicalContext, mediaType]);
 
+  // ── CME pearl builder ───────────────────────────────────────────────────────
+
+  const buildCMEPearl = (r: RadiologyReport): string => {
+    const top = r.findings.filter(f => f.abnormal)[0];
+    const dx  = top?.differentials?.[0];
+    return [
+      `Modality: ${r.detectedModality}`,
+      top ? `Key finding: ${top.finding} (${top.severity})` : "",
+      dx  ? `Leading diagnosis: ${dx.label} — ${dx.action.slice(0, 200)}` : "",
+      `Impression: ${r.impression.slice(0, 350)}`,
+      r.recommendations.length ? `Recommendations: ${r.recommendations.slice(0, 2).join("; ")}` : "",
+    ].filter(Boolean).join("\n");
+  };
+
   // ── Analysis ────────────────────────────────────────────────────────────────
 
   const buildMeasureContext = () => {
@@ -1202,6 +1223,8 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
       const parsed = parseJSON<RadiologyReport>(d.reply);
       if (!parsed) throw new Error("Could not parse AI response — please retry");
       setReport(parsed);
+      setCmePearl(buildCMEPearl(parsed));
+      setCmeTopic(parsed.detectedModality.slice(0, 50));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed");
     } finally {
@@ -1897,6 +1920,19 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                       </p>
                     </div>
 
+                    {/* CME earn button */}
+                    {cmePearl && (
+                      <button
+                        onClick={() => setShowCME(true)}
+                        className="w-full py-3 rounded-xl border border-blue-700/40 bg-blue-900/15 hover:bg-blue-900/25 text-blue-300 text-sm font-bold transition-all flex items-center justify-center gap-2"
+                      >
+                        🎓 Earn CME Credit from this Case →
+                      </button>
+                    )}
+
+                    {/* CME wallet */}
+                    <CMEWalletWidget refreshKey={cmeRefresh} />
+
                     {/* Action buttons */}
                     <div className="flex gap-2 pb-6">
                       <button onClick={copyReport}
@@ -1907,7 +1943,7 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
                         className="flex-1 py-3 rounded-xl border border-blue-700/50 bg-blue-900/20 text-blue-400 text-sm font-semibold hover:bg-blue-900/30 transition-colors flex items-center justify-center gap-1.5">
                         🖨 Print
                       </button>
-                      <button onClick={() => { setReport(null); setError(null); }}
+                      <button onClick={() => { setReport(null); setError(null); setCmePearl(""); }}
                         className="py-3 px-4 rounded-xl border border-gray-700 text-gray-500 text-sm hover:text-white hover:border-gray-500 transition-colors">
                         Retry
                       </button>
@@ -1919,6 +1955,17 @@ export function RadiologyTab({ onSendToGrandRounds }: { onSendToGrandRounds?: (c
           </div>
         )}
       </div>
+
+      {/* CME quiz modal */}
+      {showCME && cmePearl && (
+        <CMEQuizModal
+          pearl={cmePearl}
+          topic={cmeTopic}
+          source="rAIdiology"
+          onClose={() => setShowCME(false)}
+          onEarned={() => { setShowCME(false); setCmeRefresh(r => r + 1); }}
+        />
+      )}
     </div>
   );
 }

@@ -14,16 +14,16 @@ export async function POST(req: NextRequest) {
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1200,
-        system: `You are a physician CME quiz generator for PrognoSX. Generate exactly 3 multiple-choice questions testing clinical knowledge from the given teaching pearl. Return ONLY valid JSON — no markdown.
+        max_tokens: 1400,
+        system: `You are a clinical CME question writer for PrognoSX. Write exactly 2 multiple-choice questions from the given clinical case. Questions must be relevant to practicing MDs, NPs, PAs, and RNs. Focus on clinical decision-making, not trivia. Return ONLY valid JSON — no markdown, no preamble.
 
-Format:
-{"questions":[{"q":"Question text?","options":["A: ...","B: ...","C: ...","D: ..."],"correct":"A","explanation":"Brief explanation why A is correct."}]}`,
-        messages: [{ role: "user", content: `Generate 3 CME questions from this teaching pearl:\n\n${pearl}` }],
+Format (exactly):
+{"questions":[{"q":"Question?","options":["A: ...","B: ...","C: ...","D: ..."],"correct":"A","explanation":"Why A is correct and why the others are wrong."}]}`,
+        messages: [{ role: "user", content: `Write 2 CME questions based on this clinical case:\n\n${pearl}` }],
       }),
     });
   } catch (err) {
-    return NextResponse.json({ error: `Network error reaching AI: ${String(err).slice(0, 200)}` }, { status: 502 });
+    return NextResponse.json({ error: `Network error: ${String(err).slice(0, 200)}` }, { status: 502 });
   }
 
   if (!response.ok) {
@@ -36,8 +36,7 @@ Format:
   const start = text.indexOf("{");
   if (start === -1) return NextResponse.json({ error: "No JSON in response" }, { status: 500 });
   try {
-    const parsed = JSON.parse(text.slice(start));
-    return NextResponse.json(parsed);
+    return NextResponse.json(JSON.parse(text.slice(start)));
   } catch {
     return NextResponse.json({ error: "Failed to parse quiz" }, { status: 500 });
   }
