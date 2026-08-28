@@ -42,7 +42,7 @@ export const LICENSE_CONFIG: Record<LicenseType, {
     cycleDays: 365,
     unit: "CME Credits",
     body: "AMA PRA Category 1 & 2",
-    color: "#3b82f6",
+    color: "#1d4ed8",
   },
   NP: {
     label: "NP",
@@ -51,7 +51,7 @@ export const LICENSE_CONFIG: Record<LicenseType, {
     cycleDays: 730,
     unit: "Contact Hours",
     body: "ANCC / AANP",
-    color: "#8b5cf6",
+    color: "#6d28d9",
   },
   PA: {
     label: "PA-C",
@@ -60,7 +60,7 @@ export const LICENSE_CONFIG: Record<LicenseType, {
     cycleDays: 730,
     unit: "CME Credits",
     body: "NCCPA",
-    color: "#06b6d4",
+    color: "#0e7490",
   },
   RN: {
     label: "RN",
@@ -69,7 +69,7 @@ export const LICENSE_CONFIG: Record<LicenseType, {
     cycleDays: 730,
     unit: "Contact Hours",
     body: "State board requirement",
-    color: "#10b981",
+    color: "#047857",
   },
 };
 
