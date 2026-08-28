@@ -37,9 +37,9 @@ function LicenseSetup({ onSelect }: { onSelect: (l: LicenseType) => void }) {
           <button
             key={type}
             onClick={() => onSelect(type)}
-            className="p-3.5 rounded-xl border border-gray-700 hover:border-blue-600/60 hover:bg-blue-900/10 text-left transition-all group"
+            className="p-3.5 rounded-xl border border-gray-700 hover:border-blue-800/60 hover:bg-blue-950/10 text-left transition-all group"
           >
-            <p className="text-sm font-black text-white group-hover:text-blue-300 transition-colors">{cfg.label}</p>
+            <p className="text-sm font-black text-white group-hover:text-blue-200 transition-colors">{cfg.label}</p>
             <p className="text-xs text-gray-500 mt-0.5 leading-snug">{cfg.fullLabel}</p>
             <p className="text-xs mt-1.5 font-semibold" style={{ color: cfg.color }}>
               {cfg.cycleCredits} {cfg.unit} / {cfg.cycleDays === 365 ? "year" : "2 years"}
@@ -86,7 +86,7 @@ export function CMEWalletWidget({ refreshKey = 0 }: { refreshKey?: number }) {
         >
           <span className="text-base">🎓</span>
           <span className="text-sm font-bold text-white flex-1 text-left">CME Wallet</span>
-          <span className="text-xs text-blue-400 font-semibold">Set up →</span>
+          <span className="text-xs text-blue-300 font-semibold">Set up →</span>
         </button>
         <div className="border-t border-gray-800">
           <LicenseSetup onSelect={handleLicenseSelect} />
