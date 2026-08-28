@@ -83,7 +83,7 @@ export function CMEQuizModal({ pearl, topic, source, onClose, onEarned }: Props)
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-800 bg-gray-900/80">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-600/40 flex items-center justify-center text-sm">🎓</div>
+            <div className="w-7 h-7 rounded-lg bg-blue-900/30 border border-blue-800/50 flex items-center justify-center text-sm">🎓</div>
             <div>
               <p className="text-xs font-extrabold text-white leading-none">Quick CME Check</p>
               <p className="text-xs text-gray-500 mt-0.5 leading-none">{cfg.unit} · {source}</p>
@@ -96,7 +96,7 @@ export function CMEQuizModal({ pearl, topic, source, onClose, onEarned }: Props)
         <div className="p-5">
           {loading && (
             <div className="flex flex-col items-center gap-3 py-8">
-              <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+              <div className="w-8 h-8 rounded-full border-2 border-blue-700 border-t-transparent animate-spin" />
               <p className="text-sm text-gray-400">Generating clinical question…</p>
             </div>
           )}
@@ -115,14 +115,14 @@ export function CMEQuizModal({ pearl, topic, source, onClose, onEarned }: Props)
                 {questions.map((_, i) => (
                   <div key={i} className={cn(
                     "h-1 flex-1 rounded-full transition-all duration-300",
-                    i < step ? "bg-blue-500" : i === step ? "bg-blue-400" : "bg-gray-700"
+                    i < step ? "bg-blue-700" : i === step ? "bg-blue-600" : "bg-gray-700"
                   )} />
                 ))}
                 <span className="text-xs text-gray-600 ml-1 flex-shrink-0">{step + 1}/{questions.length}</span>
               </div>
 
               {/* Topic chip */}
-              <p className="text-xs font-semibold text-blue-400/80 bg-blue-900/20 border border-blue-800/30 rounded-full px-2.5 py-1 w-fit">{topic}</p>
+              <p className="text-xs font-semibold text-blue-300/80 bg-blue-950/30 border border-blue-900/40 rounded-full px-2.5 py-1 w-fit">{topic}</p>
 
               {/* Question */}
               <p className="text-sm font-semibold text-white leading-relaxed">{q.q}</p>
@@ -179,7 +179,7 @@ export function CMEQuizModal({ pearl, topic, source, onClose, onEarned }: Props)
               {revealed && (
                 <button
                   onClick={handleNext}
-                  className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition-colors"
+                  className="w-full py-3 rounded-xl bg-blue-800 hover:bg-blue-700 text-white font-bold text-sm transition-colors"
                 >
                   {step < questions.length - 1 ? "Next Question →" : "Finish & Claim Credits"}
                 </button>
@@ -189,7 +189,7 @@ export function CMEQuizModal({ pearl, topic, source, onClose, onEarned }: Props)
 
           {done && (
             <div className="py-4 flex flex-col items-center gap-4 text-center">
-              <div className="w-16 h-16 rounded-full bg-blue-900/40 border-2 border-blue-500/60 flex items-center justify-center text-3xl animate-in zoom-in duration-300">
+              <div className="w-16 h-16 rounded-full bg-blue-950/40 border-2 border-blue-700/60 flex items-center justify-center text-3xl animate-in zoom-in duration-300">
                 🎓
               </div>
               <div>
